@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import com.lrsoftwares.finance_ai_agent.dto.CategoryTotalResponse;
 import com.lrsoftwares.finance_ai_agent.dto.MonthlySummaryResponse;
 import com.lrsoftwares.finance_ai_agent.dto.TransactionResponse;
+import com.lrsoftwares.finance_ai_agent.entity.TransactionType;
 
 import lombok.RequiredArgsConstructor;
 
@@ -32,23 +33,23 @@ public class SummaryService {
 		var transactions = transactionService.getByUserAndDate(userId, startDate, endDate);
 		
 		var totalIncome = transactions.stream()
-				.filter(transaction -> transaction.amount().compareTo(BigDecimal.ZERO) > 0)
+				.filter(transaction -> transaction.type() == TransactionType.INCOME)
 				.map(TransactionResponse::amount)
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
 		var totalExpense = transactions.stream()
-				.filter(transaction -> transaction.amount().compareTo(BigDecimal.ZERO) < 0)
+				.filter(transaction -> transaction.type() == TransactionType.EXPENSE)
 				.map(TransactionResponse::amount)
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
 
 		var categoryTotals = transactions.stream()
-				.filter(transaction -> transaction.amount().compareTo(BigDecimal.ZERO) < 0)
-				.collect(Collectors.groupingBy(TransactionResponse::category,
+				.filter(transaction -> transaction.type() == TransactionType.EXPENSE)
+				.collect(Collectors.groupingBy(TransactionResponse::categoryName,
 						Collectors.mapping(TransactionResponse::amount,
 								Collectors.reducing(BigDecimal.ZERO, BigDecimal::add))))
 				.entrySet().stream()
-				.map(entry -> new CategoryTotalResponse(entry.getKey().getName(), entry.getValue().negate()))
-				.collect(Collectors.toList());
-		var balance = totalIncome.add(totalExpense);
+				.map(entry -> new CategoryTotalResponse(entry.getKey(), entry.getValue()))
+				.toList();
+		var balance = totalIncome.subtract(totalExpense);
 
 		return new MonthlySummaryResponse(totalIncome, totalExpense, balance, categoryTotals);
 	}

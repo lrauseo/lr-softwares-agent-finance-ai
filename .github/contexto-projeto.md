@@ -1,0 +1,1 @@
+quero criar um agente de IA que seja um consultor financeiro que tenha experiencia em finanças pessoais, utilizando tudo que estudamos anteiormente sobre LLM, RAG, MCP

@@ -11,6 +11,7 @@ import org.springframework.lang.NonNull;
 import com.lrsoftwares.finance_ai_agent.dto.CategoryResponse;
 import com.lrsoftwares.finance_ai_agent.dto.CreateCategoryRequest;
 import com.lrsoftwares.finance_ai_agent.entity.Category;
+import com.lrsoftwares.finance_ai_agent.exception.BusinessException;
 import com.lrsoftwares.finance_ai_agent.mapper.CategoryMapper;
 import com.lrsoftwares.finance_ai_agent.repository.CategoryRepository;
 
@@ -22,6 +23,15 @@ public class CategoryService {
 	private final CategoryMapper categoryMapper;
 
 	public void salvar(@NonNull CreateCategoryRequest request) {
+		boolean exists = categoryRepository.existsByUserIdAndNameIgnoreCaseAndType(
+				request.userId(),
+				request.name(),
+				request.type());
+
+		if (exists) {
+			throw new BusinessException("Ja existe uma categoria com esse nome para esse tipo.");
+		}
+
 		Category category = categoryMapper.toEntity(request);
 		category.setSystemDefault(Boolean.FALSE);
 		categoryRepository.save(category);

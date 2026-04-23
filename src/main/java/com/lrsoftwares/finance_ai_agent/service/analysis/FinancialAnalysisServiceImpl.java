@@ -19,6 +19,7 @@ import com.lrsoftwares.finance_ai_agent.dto.FinancialAlertCode;
 import com.lrsoftwares.finance_ai_agent.dto.FinancialAlertMessage;
 import com.lrsoftwares.finance_ai_agent.dto.FinancialAlertSeverity;
 import com.lrsoftwares.finance_ai_agent.dto.MonthlySummaryResponse;
+import com.lrsoftwares.finance_ai_agent.entity.TransactionType;
 import com.lrsoftwares.finance_ai_agent.service.SummaryService;
 import com.lrsoftwares.finance_ai_agent.service.TransactionService;
 
@@ -43,7 +44,7 @@ public class FinancialAnalysisServiceImpl implements FinancialAnalysisService {
 
         List<FinancialAlert> alerts = new ArrayList<>();
         BigDecimal income = safe(currentMonthSummary.totalIncome());
-        BigDecimal expense = safe(currentMonthSummary.totalExpense()).abs();
+        BigDecimal expense = safe(currentMonthSummary.totalExpense());
         BigDecimal balance = safe(currentMonthSummary.balance());
 
         if (expense.compareTo(income) > 0) {
@@ -125,9 +126,8 @@ public class FinancialAnalysisServiceImpl implements FinancialAnalysisService {
         BigDecimal recurringExpenses = transactionService.getByUserAndDate(userId, startDate, endDate)
                 .stream()
                 .filter(transaction -> Boolean.TRUE.equals(transaction.recurring()))
+            .filter(transaction -> transaction.type() == TransactionType.EXPENSE)
                 .map(transaction -> safe(transaction.amount()))
-                .filter(amount -> amount.compareTo(BigDecimal.ZERO) < 0)
-                .map(BigDecimal::abs)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         if (recurringExpenses.compareTo(BigDecimal.ZERO) <= 0) {

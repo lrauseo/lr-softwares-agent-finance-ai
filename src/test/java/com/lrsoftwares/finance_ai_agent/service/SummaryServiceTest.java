@@ -19,7 +19,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.lrsoftwares.finance_ai_agent.dto.TransactionResponse;
-import com.lrsoftwares.finance_ai_agent.entity.Category;
 import com.lrsoftwares.finance_ai_agent.entity.TransactionType;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,39 +35,19 @@ class SummaryServiceTest {
         UUID userId = UUID.randomUUID();
         LocalDate monthDate = LocalDate.of(2026, 4, 15);
 
-        Category salary = Category.builder()
-                .id(UUID.randomUUID())
-                .userId(userId)
-                .name("Salario")
-                .type(TransactionType.INCOME)
-                .systemDefault(false)
-                .build();
-
-        Category housing = Category.builder()
-                .id(UUID.randomUUID())
-                .userId(userId)
-                .name("Moradia")
-                .type(TransactionType.EXPENSE)
-                .systemDefault(false)
-                .build();
-
-        Category leisure = Category.builder()
-                .id(UUID.randomUUID())
-                .userId(userId)
-                .name("Lazer")
-                .type(TransactionType.EXPENSE)
-                .systemDefault(false)
-                .build();
+        UUID salaryCategoryId = UUID.randomUUID();
+        UUID housingCategoryId = UUID.randomUUID();
+        UUID leisureCategoryId = UUID.randomUUID();
 
         List<TransactionResponse> transactions = List.of(
-                new TransactionResponse(UUID.randomUUID(), userId, salary, LocalDate.of(2026, 4, 1),
+                new TransactionResponse(UUID.randomUUID(), userId, salaryCategoryId, "Salario", LocalDate.of(2026, 4, 1),
                         new BigDecimal("3000.00"), TransactionType.INCOME, "Renda principal", false),
-                new TransactionResponse(UUID.randomUUID(), userId, salary, LocalDate.of(2026, 4, 20),
+                new TransactionResponse(UUID.randomUUID(), userId, salaryCategoryId, "Salario", LocalDate.of(2026, 4, 20),
                         new BigDecimal("500.00"), TransactionType.INCOME, "Renda extra", false),
-                new TransactionResponse(UUID.randomUUID(), userId, housing, LocalDate.of(2026, 4, 5),
-                        new BigDecimal("-1200.00"), TransactionType.EXPENSE, "Aluguel", true),
-                new TransactionResponse(UUID.randomUUID(), userId, leisure, LocalDate.of(2026, 4, 12),
-                        new BigDecimal("-300.00"), TransactionType.EXPENSE, "Cinema", false));
+                new TransactionResponse(UUID.randomUUID(), userId, housingCategoryId, "Moradia", LocalDate.of(2026, 4, 5),
+                        new BigDecimal("1200.00"), TransactionType.EXPENSE, "Aluguel", true),
+                new TransactionResponse(UUID.randomUUID(), userId, leisureCategoryId, "Lazer", LocalDate.of(2026, 4, 12),
+                        new BigDecimal("300.00"), TransactionType.EXPENSE, "Cinema", false));
 
         when(transactionService.getByUserAndDate(userId, LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 30)))
                 .thenReturn(transactions);
@@ -76,7 +55,7 @@ class SummaryServiceTest {
         var result = summaryService.getMonthlySummary(userId, monthDate);
 
         assertThat(result.totalIncome()).isEqualByComparingTo("3500.00");
-        assertThat(result.totalExpense()).isEqualByComparingTo("-1500.00");
+        assertThat(result.totalExpense()).isEqualByComparingTo("1500.00");
         assertThat(result.balance()).isEqualByComparingTo("2000.00");
 
         Map<String, BigDecimal> categoryTotals = result.categories().stream()

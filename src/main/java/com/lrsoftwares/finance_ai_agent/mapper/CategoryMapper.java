@@ -13,6 +13,9 @@ public interface CategoryMapper {
 	
 	@NonNull
 	@Mapping(target = "id", ignore = true)
+	@Mapping(target = "systemDefault", ignore = true)
+	@Mapping(target = "createdAt", ignore = true)
+	@Mapping(target = "updatedAt", ignore = true)
 	Category toEntity(@NonNull CreateCategoryRequest request);
 
 	@NonNull
