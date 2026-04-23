@@ -2,158 +2,187 @@ package com.lrsoftwares.finance_ai_agent.service.analysis;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
-import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 import com.lrsoftwares.finance_ai_agent.dto.CategoryTotalResponse;
-import com.lrsoftwares.finance_ai_agent.dto.FinancialAlert;
-import com.lrsoftwares.finance_ai_agent.dto.FinancialAlertCode;
-import com.lrsoftwares.finance_ai_agent.dto.FinancialAlertMessage;
-import com.lrsoftwares.finance_ai_agent.dto.FinancialAlertSeverity;
+import com.lrsoftwares.finance_ai_agent.dto.FinancialAlertResponse;
+import com.lrsoftwares.finance_ai_agent.dto.FinancialDiagnosisResponse;
 import com.lrsoftwares.finance_ai_agent.dto.MonthlySummaryResponse;
-import com.lrsoftwares.finance_ai_agent.entity.TransactionType;
+import com.lrsoftwares.finance_ai_agent.entity.AlertSeverity;
 import com.lrsoftwares.finance_ai_agent.service.SummaryService;
-import com.lrsoftwares.finance_ai_agent.service.TransactionService;
 
 import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
 public class FinancialAnalysisServiceImpl implements FinancialAnalysisService {
-    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
-    private static final BigDecimal TIGHT_BALANCE_THRESHOLD = BigDecimal.valueOf(10);
-    private static final BigDecimal HIGH_CATEGORY_INCOME_PERCENT = BigDecimal.valueOf(35);
-    private static final BigDecimal STRONG_GROWTH_PERCENT = BigDecimal.valueOf(40);
-    private static final BigDecimal HEAVY_SUBSCRIPTIONS_PERCENT = BigDecimal.valueOf(20);
+
+    private static final BigDecimal ZERO = BigDecimal.ZERO;
+    private static final BigDecimal LOW_BALANCE_RATE = new BigDecimal("0.10");
+    private static final BigDecimal HIGH_CATEGORY_RATE = new BigDecimal("0.35");
+    private static final BigDecimal VERY_HIGH_CATEGORY_RATE = new BigDecimal("0.50");
 
     private final SummaryService summaryService;
-    private final TransactionService transactionService;
 
     @Override
-    public List<FinancialAlert> analyzeMonthlyHealth(@NonNull UUID userId, @NonNull YearMonth month) {
-        MonthlySummaryResponse currentMonthSummary = summaryService.getSummaryMonthlyByUserIdAndDate(userId, month);
-        MonthlySummaryResponse previousMonthSummary = summaryService.getSummaryMonthlyByUserIdAndDate(userId, month.minusMonths(1));
+    public FinancialDiagnosisResponse analyzeMonthly(UUID userId, YearMonth month) {
+        MonthlySummaryResponse summary = summaryService.getSummaryMonthlyByUserIdAndDate(userId, month);
 
-        List<FinancialAlert> alerts = new ArrayList<>();
-        BigDecimal income = safe(currentMonthSummary.totalIncome());
-        BigDecimal expense = safe(currentMonthSummary.totalExpense());
-        BigDecimal balance = safe(currentMonthSummary.balance());
+        List<FinancialAlertResponse> alerts = new ArrayList<>();
+        List<String> highlights = new ArrayList<>();
+        List<String> recommendations = new ArrayList<>();
 
-        if (expense.compareTo(income) > 0) {
-            alerts.add(createAlert(
-                    FinancialAlertCode.EXPENSES_EXCEED_INCOME,
-                    FinancialAlertMessage.EXPENSES_EXCEED_INCOME.format(),
-                    FinancialAlertSeverity.CRITICAL));
-        }
+        BigDecimal totalIncome = summary.totalIncome();
+        BigDecimal totalExpense = summary.totalExpense();
+        BigDecimal balance = summary.balance();
 
-        if (income.compareTo(BigDecimal.ZERO) > 0) {
-            BigDecimal balancePercent = toPercent(balance, income);
-            if (balancePercent.compareTo(TIGHT_BALANCE_THRESHOLD) <= 0) {
-                alerts.add(createAlert(
-                        FinancialAlertCode.TIGHT_BALANCE,
-                        FinancialAlertMessage.TIGHT_BALANCE.format(),
-                        FinancialAlertSeverity.WARNING));
-            }
+        analyzeBalance(alerts, recommendations, totalIncome, totalExpense, balance);
+        analyzeCategories(alerts, highlights, recommendations, summary.categories(), totalIncome, totalExpense);
 
-            evaluateHighCategoryConsumption(currentMonthSummary.categories(), income, alerts);
-            evaluateStrongCategoryGrowth(currentMonthSummary.categories(), previousMonthSummary.categories(), alerts);
-            evaluateRecurringSubscriptions(userId, month, income, alerts);
-        }
+        highlights.add(buildMainHighlight(totalIncome, totalExpense, balance));
 
-        return alerts;
+        alerts.sort(Comparator.comparing(FinancialAlertResponse::severity).reversed());
+
+        return new FinancialDiagnosisResponse(
+                userId,
+                month,
+                summary,
+                alerts,
+                highlights,
+                recommendations
+        );
     }
 
-    private void evaluateHighCategoryConsumption(List<CategoryTotalResponse> categories, BigDecimal income,
-            List<FinancialAlert> alerts) {
-        for (CategoryTotalResponse category : categories) {
-            BigDecimal total = safe(category.total());
-            if (total.compareTo(BigDecimal.ZERO) <= 0) {
-                continue;
-            }
+    private void analyzeBalance(List<FinancialAlertResponse> alerts,
+                                List<String> recommendations,
+                                BigDecimal totalIncome,
+                                BigDecimal totalExpense,
+                                BigDecimal balance) {
 
-            BigDecimal percent = toPercent(total, income);
-            if (percent.compareTo(HIGH_CATEGORY_INCOME_PERCENT) >= 0) {
-                alerts.add(createAlert(
-                        FinancialAlertCode.HIGH_CATEGORY_CONSUMPTION,
-                        FinancialAlertMessage.HIGH_CATEGORY_CONSUMPTION.format(category.category(), percent),
-                        FinancialAlertSeverity.WARNING));
-            }
-        }
-    }
-
-    private void evaluateStrongCategoryGrowth(List<CategoryTotalResponse> currentCategories,
-            List<CategoryTotalResponse> previousCategories, List<FinancialAlert> alerts) {
-        Map<String, BigDecimal> previousByCategory = previousCategories.stream()
-                .collect(Collectors.toMap(CategoryTotalResponse::category,
-                        category -> safe(category.total()),
-                        BigDecimal::add));
-
-        for (CategoryTotalResponse currentCategory : currentCategories) {
-            BigDecimal currentTotal = safe(currentCategory.total());
-            BigDecimal previousTotal = previousByCategory.getOrDefault(currentCategory.category(), BigDecimal.ZERO);
-
-            if (currentTotal.compareTo(BigDecimal.ZERO) <= 0 || previousTotal.compareTo(BigDecimal.ZERO) <= 0) {
-                continue;
-            }
-
-            BigDecimal growthPercent = currentTotal.subtract(previousTotal)
-                    .multiply(HUNDRED)
-                    .divide(previousTotal, 2, RoundingMode.HALF_UP);
-
-            if (growthPercent.compareTo(STRONG_GROWTH_PERCENT) >= 0) {
-                alerts.add(createAlert(
-                        FinancialAlertCode.STRONG_CATEGORY_GROWTH,
-                        FinancialAlertMessage.STRONG_CATEGORY_GROWTH
-                                .format(currentCategory.category(), growthPercent),
-                        FinancialAlertSeverity.WARNING));
-            }
-        }
-    }
-
-    private void evaluateRecurringSubscriptions(UUID userId, YearMonth month, BigDecimal income,
-            List<FinancialAlert> alerts) {
-        LocalDate startDate = month.atDay(1);
-        LocalDate endDate = month.atEndOfMonth();
-
-        BigDecimal recurringExpenses = transactionService.getByUserAndDate(userId, startDate, endDate)
-                .stream()
-                .filter(transaction -> Boolean.TRUE.equals(transaction.recurring()))
-            .filter(transaction -> transaction.type() == TransactionType.EXPENSE)
-                .map(transaction -> safe(transaction.amount()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        if (recurringExpenses.compareTo(BigDecimal.ZERO) <= 0) {
+        if (isZero(totalIncome) && totalExpense.compareTo(ZERO) > 0) {
+            alerts.add(new FinancialAlertResponse(
+                    AlertSeverity.CRITICAL,
+                    "NO_INCOME_WITH_EXPENSES",
+                    "Despesas sem receita registrada",
+                    "Você possui despesas no mês, mas nenhuma receita foi registrada.",
+                    totalExpense
+            ));
+            recommendations.add("Cadastre suas receitas do mês para que a análise fique correta.");
             return;
         }
 
-        BigDecimal recurringPercent = toPercent(recurringExpenses, income);
-        if (recurringPercent.compareTo(HEAVY_SUBSCRIPTIONS_PERCENT) >= 0) {
-            alerts.add(createAlert(
-                    FinancialAlertCode.HEAVY_RECURRING_SUBSCRIPTIONS,
-                    FinancialAlertMessage.HEAVY_RECURRING_SUBSCRIPTIONS.format(recurringPercent),
-                    FinancialAlertSeverity.WARNING));
+        if (totalExpense.compareTo(totalIncome) > 0) {
+            alerts.add(new FinancialAlertResponse(
+                    AlertSeverity.CRITICAL,
+                    "EXPENSES_GREATER_THAN_INCOME",
+                    "Despesas maiores que receitas",
+                    "Suas despesas ultrapassaram suas receitas neste mês.",
+                    totalExpense.subtract(totalIncome)
+            ));
+            recommendations.add("Revise despesas variáveis e recorrentes imediatamente.");
+            return;
+        }
+
+        if (totalIncome.compareTo(ZERO) > 0) {
+            BigDecimal balanceRate = balance.divide(totalIncome, 4, RoundingMode.HALF_UP);
+
+            if (balanceRate.compareTo(LOW_BALANCE_RATE) < 0) {
+                alerts.add(new FinancialAlertResponse(
+                        AlertSeverity.WARNING,
+                        "LOW_BALANCE_RATE",
+                        "Saldo mensal apertado",
+                        "Seu saldo final ficou abaixo de 10% da receita do mês.",
+                        balance
+                ));
+                recommendations.add("Tente reservar pelo menos 10% da receita mensal antes de gastos variáveis.");
+            }
         }
     }
 
-    private FinancialAlert createAlert(FinancialAlertCode code, String message, FinancialAlertSeverity severity) {
-        return new FinancialAlert(code.getCode(), message, severity.name());
+    private void analyzeCategories(List<FinancialAlertResponse> alerts,
+                                   List<String> highlights,
+                                   List<String> recommendations,
+                                   List<CategoryTotalResponse> categories,
+                                   BigDecimal totalIncome,
+                                   BigDecimal totalExpense) {
+
+        if (categories == null || categories.isEmpty()) {
+            highlights.add("Nenhuma despesa categorizada encontrada no mês.");
+            return;
+        }
+
+        CategoryTotalResponse topCategory = categories.stream()
+                .max(Comparator.comparing(CategoryTotalResponse::total))
+                .orElse(null);
+
+        if (topCategory == null) {
+            return;
+        }
+
+        highlights.add("Maior categoria de despesa: " + topCategory.category() + " com total de R$ " + topCategory.total() + ".");
+
+        if (totalIncome.compareTo(ZERO) > 0) {
+            BigDecimal categoryIncomeRate = topCategory.total().divide(totalIncome, 4, RoundingMode.HALF_UP);
+
+            if (categoryIncomeRate.compareTo(VERY_HIGH_CATEGORY_RATE) >= 0) {
+                alerts.add(new FinancialAlertResponse(
+                        AlertSeverity.CRITICAL,
+                        "CATEGORY_OVER_50_PERCENT_INCOME",
+                        "Categoria consumindo mais de 50% da receita",
+                        "A categoria " + topCategory.category() + " consumiu mais de 50% da sua receita mensal.",
+                        topCategory.total()
+                ));
+                recommendations.add("Investigue a categoria " + topCategory.category() + " e veja se há gastos que podem ser reduzidos.");
+            } else if (categoryIncomeRate.compareTo(HIGH_CATEGORY_RATE) >= 0) {
+                alerts.add(new FinancialAlertResponse(
+                        AlertSeverity.WARNING,
+                        "CATEGORY_OVER_35_PERCENT_INCOME",
+                        "Categoria consumindo parte alta da receita",
+                        "A categoria " + topCategory.category() + " consumiu mais de 35% da sua receita mensal.",
+                        topCategory.total()
+                ));
+                recommendations.add("Defina um limite mensal para " + topCategory.category() + ".");
+            }
+        }
+
+        if (totalExpense.compareTo(ZERO) > 0) {
+            BigDecimal categoryExpenseRate = topCategory.total().divide(totalExpense, 4, RoundingMode.HALF_UP);
+
+            if (categoryExpenseRate.compareTo(new BigDecimal("0.40")) >= 0) {
+                alerts.add(new FinancialAlertResponse(
+                        AlertSeverity.INFO,
+                        "CATEGORY_CONCENTRATION",
+                        "Despesa concentrada em uma categoria",
+                        "A categoria " + topCategory.category() + " representa uma parte relevante das despesas do mês.",
+                        topCategory.total()
+                ));
+            }
+        }
     }
 
-    private BigDecimal toPercent(BigDecimal value, BigDecimal base) {
-        return value
-                .multiply(HUNDRED)
-                .divide(base, 2, RoundingMode.HALF_UP);
+    private String buildMainHighlight(BigDecimal totalIncome, BigDecimal totalExpense, BigDecimal balance) {
+        if (totalIncome.compareTo(ZERO) == 0 && totalExpense.compareTo(ZERO) == 0) {
+            return "Não há receitas ou despesas registradas neste mês.";
+        }
+
+        if (balance.compareTo(ZERO) < 0) {
+            return "O mês fechou negativo em R$ " + balance.abs() + ".";
+        }
+
+        if (balance.compareTo(ZERO) == 0) {
+            return "O mês fechou exatamente no zero a zero. Financeiramente emocionante, como assistir tinta secar.";
+        }
+
+        return "O mês fechou positivo em R$ " + balance + ".";
     }
 
-    private BigDecimal safe(BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value;
+    private boolean isZero(BigDecimal value) {
+        return value == null || value.compareTo(ZERO) == 0;
     }
 }

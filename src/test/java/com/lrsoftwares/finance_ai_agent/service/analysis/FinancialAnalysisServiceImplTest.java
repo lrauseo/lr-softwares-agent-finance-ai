@@ -1,28 +1,25 @@
 package com.lrsoftwares.finance_ai_agent.service.analysis;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.*;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.YearMonth;
-import java.util.List;
+import java.util.Arrays;
 import java.util.UUID;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.lrsoftwares.finance_ai_agent.dto.CategoryTotalResponse;
-import com.lrsoftwares.finance_ai_agent.dto.FinancialAlert;
+import com.lrsoftwares.finance_ai_agent.dto.FinancialDiagnosisResponse;
 import com.lrsoftwares.finance_ai_agent.dto.MonthlySummaryResponse;
-import com.lrsoftwares.finance_ai_agent.dto.TransactionResponse;
-import com.lrsoftwares.finance_ai_agent.entity.TransactionType;
+import com.lrsoftwares.finance_ai_agent.entity.AlertSeverity;
 import com.lrsoftwares.finance_ai_agent.service.SummaryService;
-import com.lrsoftwares.finance_ai_agent.service.TransactionService;
+
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class FinancialAnalysisServiceImplTest {
@@ -30,61 +27,129 @@ class FinancialAnalysisServiceImplTest {
     @Mock
     private SummaryService summaryService;
 
-    @Mock
-    private TransactionService transactionService;
+    private FinancialAnalysisServiceImpl analysisService;
 
-    @InjectMocks
-    private FinancialAnalysisServiceImpl financialAnalysisService;
+    @BeforeEach
+    void setUp() {
+        analysisService = new FinancialAnalysisServiceImpl(summaryService);
+    }
 
     @Test
-    void analyzeMonthlyHealthShouldReturnAlertsForAllConfiguredRules() {
+    void testAnalyzeMonthly_PositiveBalance() {
         UUID userId = UUID.randomUUID();
-        YearMonth month = YearMonth.of(2026, 4);
+        YearMonth month = YearMonth.now();
 
-        MonthlySummaryResponse currentSummary = new MonthlySummaryResponse(
-                new BigDecimal("1000.00"),
-                new BigDecimal("1100.00"),
-                new BigDecimal("-100.00"),
-                List.of(
-                        new CategoryTotalResponse("Moradia", new BigDecimal("400.00")),
-                        new CategoryTotalResponse("Lazer", new BigDecimal("210.00"))));
+        CategoryTotalResponse category = new CategoryTotalResponse("Alimentação", BigDecimal.valueOf(2200.00));
+        MonthlySummaryResponse summary = new MonthlySummaryResponse(
+                BigDecimal.valueOf(5000.00),
+                BigDecimal.valueOf(4800.00),
+                BigDecimal.valueOf(200.00),
+                Arrays.asList(category)
+        );
 
-        MonthlySummaryResponse previousSummary = new MonthlySummaryResponse(
-                new BigDecimal("1000.00"),
-                new BigDecimal("700.00"),
-                new BigDecimal("300.00"),
-                List.of(
-                        new CategoryTotalResponse("Moradia", new BigDecimal("200.00")),
-                        new CategoryTotalResponse("Lazer", new BigDecimal("200.00"))));
+        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month)).thenReturn(summary);
 
-        UUID subscriptionCategoryId = UUID.randomUUID();
+        FinancialDiagnosisResponse diagnosis = analysisService.analyzeMonthly(userId, month);
 
-        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month)).thenReturn(currentSummary);
-        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month.minusMonths(1))).thenReturn(previousSummary);
-        when(transactionService.getByUserAndDate(userId, month.atDay(1), month.atEndOfMonth()))
-                .thenReturn(List.of(
-                        new TransactionResponse(UUID.randomUUID(), userId, subscriptionCategoryId, "Assinaturas", LocalDate.of(2026, 4, 3),
-                                new BigDecimal("250.00"), TransactionType.EXPENSE, "Streaming", true),
-                        new TransactionResponse(UUID.randomUUID(), userId, subscriptionCategoryId, "Assinaturas", LocalDate.of(2026, 4, 8),
-                                new BigDecimal("50.00"), TransactionType.EXPENSE, "App", false),
-                        new TransactionResponse(UUID.randomUUID(), userId, subscriptionCategoryId, "Assinaturas", LocalDate.of(2026, 4, 10),
-                                new BigDecimal("100.00"), TransactionType.INCOME, "Reembolso", true)));
+        assertThat(diagnosis).isNotNull();
+        assertThat(diagnosis.userId()).isEqualTo(userId);
+        assertThat(diagnosis.month()).isEqualTo(month);
+        assertThat(diagnosis.summary().totalIncome()).isEqualByComparingTo(BigDecimal.valueOf(5000.00));
+        assertThat(diagnosis.summary().totalExpense()).isEqualByComparingTo(BigDecimal.valueOf(4800.00));
+        assertThat(diagnosis.summary().balance()).isEqualByComparingTo(BigDecimal.valueOf(200.00));
+        assertThat(diagnosis.alerts()).isNotNull();
+        assertThat(diagnosis.highlights()).isNotNull();
+        assertThat(diagnosis.recommendations()).isNotNull();
+    }
 
-        List<FinancialAlert> alerts = financialAnalysisService.analyzeMonthlyHealth(userId, month);
+    @Test
+    void testAnalyzeMonthly_ExpensesGreaterThanIncome() {
+        UUID userId = UUID.randomUUID();
+        YearMonth month = YearMonth.now();
 
-        assertThat(alerts).hasSize(5);
-        assertThat(alerts).extracting(FinancialAlert::code)
-                .containsExactlyInAnyOrder("FA-001", "FA-002", "FA-003", "FA-004", "FA-005");
-        assertThat(alerts).filteredOn(alert -> "FA-001".equals(alert.code()))
-                .singleElement()
-                .extracting(FinancialAlert::severity)
-                .isEqualTo("CRITICAL");
-        assertThat(alerts).filteredOn(alert -> !"FA-001".equals(alert.code()))
-                .extracting(FinancialAlert::severity)
-                .containsOnly("WARNING");
+        CategoryTotalResponse category = new CategoryTotalResponse("Alimentação", BigDecimal.valueOf(6000.00));
+        MonthlySummaryResponse summary = new MonthlySummaryResponse(
+                BigDecimal.valueOf(5000.00),
+                BigDecimal.valueOf(6000.00),
+                BigDecimal.valueOf(-1000.00),
+                Arrays.asList(category)
+        );
 
-        verify(summaryService).getSummaryMonthlyByUserIdAndDate(userId, month);
-        verify(summaryService).getSummaryMonthlyByUserIdAndDate(userId, month.minusMonths(1));
-        verify(transactionService).getByUserAndDate(userId, month.atDay(1), month.atEndOfMonth());
+        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month)).thenReturn(summary);
+
+        FinancialDiagnosisResponse diagnosis = analysisService.analyzeMonthly(userId, month);
+
+        assertThat(diagnosis.alerts()).isNotEmpty();
+        assertThat(diagnosis.alerts().get(0).code()).isEqualTo("EXPENSES_GREATER_THAN_INCOME");
+        assertThat(diagnosis.alerts().get(0).severity()).isEqualTo(AlertSeverity.CRITICAL);
+    }
+
+    @Test
+    void testAnalyzeMonthly_LowBalanceRate() {
+        UUID userId = UUID.randomUUID();
+        YearMonth month = YearMonth.now();
+
+        CategoryTotalResponse category = new CategoryTotalResponse("Alimentação", BigDecimal.valueOf(4500.00));
+        MonthlySummaryResponse summary = new MonthlySummaryResponse(
+                BigDecimal.valueOf(5000.00),
+                BigDecimal.valueOf(4800.00),
+                BigDecimal.valueOf(200.00),
+                Arrays.asList(category)
+        );
+
+        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month)).thenReturn(summary);
+
+        FinancialDiagnosisResponse diagnosis = analysisService.analyzeMonthly(userId, month);
+
+        assertThat(diagnosis.alerts()).isNotEmpty();
+        assertThat(diagnosis.alerts().stream()
+                .anyMatch(alert -> alert.code().equals("LOW_BALANCE_RATE")))
+                .isTrue();
+    }
+
+    @Test
+    void testAnalyzeMonthly_CategoryOver50Percent() {
+        UUID userId = UUID.randomUUID();
+        YearMonth month = YearMonth.now();
+
+        CategoryTotalResponse category = new CategoryTotalResponse("Alimentação", BigDecimal.valueOf(2600.00));
+        MonthlySummaryResponse summary = new MonthlySummaryResponse(
+                BigDecimal.valueOf(5000.00),
+                BigDecimal.valueOf(2600.00),
+                BigDecimal.valueOf(2400.00),
+                Arrays.asList(category)
+        );
+
+        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month)).thenReturn(summary);
+
+        FinancialDiagnosisResponse diagnosis = analysisService.analyzeMonthly(userId, month);
+
+        assertThat(diagnosis.alerts()).isNotEmpty();
+        assertThat(diagnosis.alerts().stream()
+                .anyMatch(alert -> alert.code().equals("CATEGORY_OVER_50_PERCENT_INCOME")))
+                .isTrue();
+    }
+
+    @Test
+    void testAnalyzeMonthly_AlertsSortedBySeverity() {
+        UUID userId = UUID.randomUUID();
+        YearMonth month = YearMonth.now();
+
+        CategoryTotalResponse category = new CategoryTotalResponse("Alimentação", BigDecimal.valueOf(2600.00));
+        MonthlySummaryResponse summary = new MonthlySummaryResponse(
+                BigDecimal.valueOf(5000.00),
+                BigDecimal.valueOf(2600.00),
+                BigDecimal.valueOf(2400.00),
+                Arrays.asList(category)
+        );
+
+        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month)).thenReturn(summary);
+
+        FinancialDiagnosisResponse diagnosis = analysisService.analyzeMonthly(userId, month);
+
+        for (int i = 1; i < diagnosis.alerts().size(); i++) {
+            assertThat(diagnosis.alerts().get(i - 1).severity().ordinal())
+                    .isGreaterThanOrEqualTo(diagnosis.alerts().get(i).severity().ordinal());
+        }
     }
 }

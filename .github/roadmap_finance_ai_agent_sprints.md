@@ -1,7 +1,9 @@
 # Roadmap do projeto `finance_ai_agent`
 
 ## Objetivo do MVP
+
 Criar um agente de IA consultor financeiro pessoal que:
+
 - receba receitas e despesas do usuário
 - categorize os lançamentos
 - gere resumo financeiro mensal
@@ -14,6 +16,7 @@ Criar um agente de IA consultor financeiro pessoal que:
 ## 1. Estado atual do projeto
 
 ### O que já existe
+
 - `Category` e `Transaction` como entidades JPA
 - controllers para:
   - categorias
@@ -32,6 +35,7 @@ Criar um agente de IA consultor financeiro pessoal que:
 - documentação OpenAPI
 
 ### O que está faltando ou incompleto
+
 - `ChatController` está vazio
 - não há endpoint funcional de chat
 - não há persistência de conversas
@@ -45,6 +49,7 @@ Criar um agente de IA consultor financeiro pessoal que:
 - não há testes
 
 ### Problemas técnicos que precisam ser corrigidos cedo
+
 - `SummaryService` calcula receita/despesa pelo **sinal do valor**, mas a entidade já tem `type`
 - `CreateTransactionRequest` aceita `type`, mas o `amount` é sempre positivo por validação. Isso conflita com a lógica atual do resumo
 - `TransactionService.salvar()` salva a transação mesmo se a categoria não existir
@@ -59,6 +64,7 @@ Criar um agente de IA consultor financeiro pessoal que:
 ## 2. Visão de arquitetura do MVP
 
 ### Camadas recomendadas
+
 - **controller**: recebe request e devolve response
 - **service**: regra de negócio
 - **repository**: acesso a banco
@@ -67,6 +73,7 @@ Criar um agente de IA consultor financeiro pessoal que:
 - **ai**: orquestra LLM com contexto controlado
 
 ### Fluxo principal do MVP
+
 1. usuário cadastra categorias
 2. usuário cadastra receitas e despesas
 3. sistema gera resumo mensal
@@ -80,9 +87,11 @@ Criar um agente de IA consultor financeiro pessoal que:
 ## 3. Sprint 0 - Colocar a casa em ordem
 
 ### Objetivo
+
 Padronizar a base antes de crescer.
 
 ### O que implementar
+
 1. corrigir nomenclaturas e inconsistências
 2. definir padrão de pacotes
 3. revisar DTOs de entrada e saída
@@ -90,6 +99,7 @@ Padronizar a base antes de crescer.
 5. adicionar validações mínimas de negócio
 
 ### Tarefas
+
 - renomear colunas:
   - `updated_ai` -> `updated_at`
 - revisar `TransactionResponse`
@@ -113,17 +123,20 @@ Padronizar a base antes de crescer.
 - remover imports mortos
 
 ### Entregáveis
+
 - CRUD de categorias e transações consistente
 - resumo mensal correto
 - projeto com naming limpo
 
 ### Critério de pronto
+
 - consigo cadastrar categoria
 - consigo cadastrar transação
 - consigo listar transações
 - consigo consultar resumo mensal com valores corretos
 
 ### O que você aprende nesta sprint
+
 - desenho de DTO
 - separação entre entidade e response
 - regra de negócio no service
@@ -134,14 +147,17 @@ Padronizar a base antes de crescer.
 ## 4. Sprint 1 - Fechar o núcleo financeiro
 
 ### Objetivo
+
 Ter um backend funcional de finanças pessoais sem IA ainda.
 
 ### O que implementar
+
 1. completar regras financeiras básicas
 2. melhorar endpoints
 3. preparar dados confiáveis para IA
 
 ### Tarefas
+
 - criar endpoint de detalhe de transação por id
 - criar endpoint de exclusão/edição de transação
 - criar endpoint de exclusão/edição de categoria
@@ -154,6 +170,7 @@ Ter um backend funcional de finanças pessoais sem IA ainda.
 - melhorar repository com queries específicas em vez de depender só de stream em memória
 
 ### Sugestão de endpoints
+
 - `POST /api/categories`
 - `GET /api/categories?userId=...`
 - `PUT /api/categories/{id}`
@@ -166,13 +183,16 @@ Ter um backend funcional de finanças pessoais sem IA ainda.
 - `GET /api/summary/monthly?userId=...&monthDate=2026-04`
 
 ### Entregáveis
+
 - API financeira sólida
 - base pronta para análises
 
 ### Critério de pronto
+
 - o sistema funciona como um mini gerenciador financeiro sem IA
 
 ### O que você aprende nesta sprint
+
 - design REST
 - queries JPA úteis para domínio real
 - tradeoff entre stream na service e agregação no banco
@@ -182,12 +202,15 @@ Ter um backend funcional de finanças pessoais sem IA ainda.
 ## 5. Sprint 2 - Motor de análise financeira determinística
 
 ### Objetivo
+
 Gerar inteligência de negócio sem depender da LLM.
 
 ### O que implementar
+
 Aproveitar o que já começou em `FinancialAnalysisServiceImpl` e fechar isso direito.
 
 ### Alertas iniciais
+
 - despesas maiores que receitas
 - saldo apertado
 - categoria consumindo percentual alto da renda
@@ -195,11 +218,13 @@ Aproveitar o que já começou em `FinancialAnalysisServiceImpl` e fechar isso di
 - peso alto de despesas recorrentes
 
 ### Melhorias necessárias
+
 - garantir que os percentuais usem receita e despesa corretas
 - separar regras configuráveis em constantes centralizadas ou properties
 - criar resposta de análise estruturada
 
 ### Novo DTO sugerido
+
 - `FinancialDiagnosisResponse`
   - `monthlySummary`
   - `alerts`
@@ -207,6 +232,7 @@ Aproveitar o que já começou em `FinancialAnalysisServiceImpl` e fechar isso di
   - `recommendations`
 
 ### Tarefas
+
 - criar endpoint:
   - `GET /api/analysis/monthly?userId=...&monthDate=2026-04`
 - padronizar severidade
@@ -215,13 +241,16 @@ Aproveitar o que já começou em `FinancialAnalysisServiceImpl` e fechar isso di
 - escrever testes unitários das regras
 
 ### Entregáveis
+
 - diagnóstico financeiro explicável
 - regras auditáveis e previsíveis
 
 ### Critério de pronto
+
 - o backend consegue dizer, sem LLM, por que a situação do usuário está ruim ou boa
 
 ### O que você aprende nesta sprint
+
 - engine de regras
 - análise de domínio
 - como preparar contexto confiável para IA
@@ -231,12 +260,15 @@ Aproveitar o que já começou em `FinancialAnalysisServiceImpl` e fechar isso di
 ## 6. Sprint 3 - Primeiro chat com IA de verdade
 
 ### Objetivo
+
 Fazer o agente responder perguntas usando dados reais do usuário.
 
 ### O que implementar
+
 Completar a camada de chat já iniciada.
 
 ### Tarefas
+
 - implementar `ChatController`
 - criar endpoint:
   - `POST /api/chat/question`
@@ -249,6 +281,7 @@ Completar a camada de chat já iniciada.
 - reforçar prompt do sistema
 
 ### Estrutura recomendada do fluxo
+
 1. recebe `userId` + `question`
 2. busca dados financeiros do usuário
 3. transforma em contexto enxuto
@@ -256,12 +289,14 @@ Completar a camada de chat já iniciada.
 5. devolve resposta textual
 
 ### Cuidados
+
 - não mandar dados demais para o prompt
 - não mandar entidade JPA crua
 - não confiar na LLM para calcular números
 - a LLM explica, não calcula a verdade final
 
 ### DTO sugerido de resposta
+
 - `ChatAnswerResponse`
   - `answer`
   - `summaryReference`
@@ -269,18 +304,22 @@ Completar a camada de chat já iniciada.
   - `generatedAt`
 
 ### Exemplo de perguntas que devem funcionar
+
 - "onde estou gastando mais?"
 - "meu mês está saudável?"
 - "o que posso cortar para economizar?"
 - "minhas despesas recorrentes estão altas?"
 
 ### Entregáveis
+
 - chat funcional com base nos dados do mês
 
 ### Critério de pronto
+
 - perguntar no endpoint e receber uma resposta coerente baseada em dados reais
 
 ### O que você aprende nesta sprint
+
 - integração Spring AI
 - prompt estruturado com contexto controlado
 - responsabilidade entre regra de negócio e LLM
@@ -290,12 +329,15 @@ Completar a camada de chat já iniciada.
 ## 7. Sprint 4 - Persistência de conversas e memória curta
 
 ### Objetivo
+
 Parar de tratar cada pergunta como isolada.
 
 ### O que implementar
+
 Criar histórico de conversas por usuário.
 
 ### Entidades sugeridas
+
 - `ChatSession`
   - `id`
   - `userId`
@@ -310,6 +352,7 @@ Criar histórico de conversas por usuário.
   - `createdAt`
 
 ### Tarefas
+
 - criar tabelas e migrations
 - criar endpoints:
   - `POST /api/chat/sessions`
@@ -319,12 +362,15 @@ Criar histórico de conversas por usuário.
 - enviar últimas N mensagens no contexto do chat
 
 ### Entregáveis
+
 - histórico simples de conversa
 
 ### Critério de pronto
+
 - o assistente consegue responder mantendo contexto recente
 
 ### O que você aprende nesta sprint
+
 - memória conversacional básica
 - modelagem de chat backend
 
@@ -333,9 +379,11 @@ Criar histórico de conversas por usuário.
 ## 8. Sprint 5 - RAG interno do domínio financeiro
 
 ### Objetivo
+
 Adicionar base de conhecimento para melhorar as respostas.
 
 ### Possíveis fontes para o RAG
+
 - conteúdo educativo sobre finanças pessoais
 - regras de orçamento
 - glossário de categorias
@@ -343,6 +391,7 @@ Adicionar base de conhecimento para melhorar as respostas.
 - regras próprias do app
 
 ### Arquitetura sugerida
+
 - documentos fonte
 - chunking
 - embeddings
@@ -351,6 +400,7 @@ Adicionar base de conhecimento para melhorar as respostas.
 - envio dos trechos recuperados ao prompt
 
 ### Tarefas
+
 - criar ingestão de documentos
 - definir metadata dos chunks
   - `source`
@@ -364,12 +414,15 @@ Adicionar base de conhecimento para melhorar as respostas.
   - trechos recuperados
 
 ### Entregáveis
+
 - respostas mais educativas e contextualizadas
 
 ### Critério de pronto
+
 - o assistente responde usando dados do usuário + conhecimento documental
 
 ### O que você aprende nesta sprint
+
 - RAG na prática
 - embeddings
 - busca vetorial
@@ -380,15 +433,18 @@ Adicionar base de conhecimento para melhorar as respostas.
 ## 9. Sprint 6 - Segurança, identidade e multiusuário real
 
 ### Objetivo
+
 Parar de depender de `userId` aberto em query param como se o mundo fosse um jardim zen.
 
 ### O que implementar
+
 - autenticação JWT
 - extrair usuário do token
 - remover `userId` do request sempre que possível
 - autorização por dono do registro
 
 ### Tarefas
+
 - integrar Spring Security
 - definir strategy de auth
   - local simples no MVP ou Keycloak depois
@@ -396,12 +452,15 @@ Parar de depender de `userId` aberto em query param como se o mundo fosse um jar
 - auditar acesso a categorias/transações/chat
 
 ### Entregáveis
+
 - backend minimamente seguro
 
 ### Critério de pronto
+
 - um usuário não consegue ver dados do outro
 
 ### O que você aprende nesta sprint
+
 - segurança em API Spring
 - ownership de dados
 
@@ -410,9 +469,11 @@ Parar de depender de `userId` aberto em query param como se o mundo fosse um jar
 ## 10. Sprint 7 - Qualidade, observabilidade e docker
 
 ### Objetivo
+
 Deixar o projeto executável de forma previsível.
 
 ### O que implementar
+
 - Dockerfile
 - docker-compose
 - banco local
@@ -422,6 +483,7 @@ Deixar o projeto executável de forma previsível.
 - testes básicos
 
 ### Tarefas
+
 - criar `Dockerfile`
 - criar `docker-compose.yml` com:
   - app
@@ -437,13 +499,16 @@ Deixar o projeto executável de forma previsível.
   - controller integration test
 
 ### Entregáveis
+
 - projeto sobe com um comando
 - ambiente previsível para desenvolvimento
 
 ### Critério de pronto
+
 - `docker compose up` sobe tudo e Swagger abre
 
 ### O que você aprende nesta sprint
+
 - empacotamento real de backend
 - configuração por ambiente
 - testabilidade
@@ -453,6 +518,7 @@ Deixar o projeto executável de forma previsível.
 ## 11. Sprint 8 - Evoluções pós-MVP
 
 ### Itens futuros
+
 - importação de CSV/OFX
 - dashboards
 - metas financeiras
@@ -478,6 +544,7 @@ Deixar o projeto executável de forma previsível.
 9. Sprint 8
 
 ### Por que essa ordem?
+
 - primeiro confiabilidade de domínio
 - depois análise
 - depois IA
@@ -491,7 +558,9 @@ Deixar o projeto executável de forma previsível.
 ## 13. Próxima ação prática
 
 ### Primeiro bloco de implementação comigo
+
 Começar agora pela **Sprint 0** com estes passos:
+
 1. revisar DTOs
 2. corrigir cálculo do resumo
 3. corrigir validação de categoria na transação
@@ -499,6 +568,7 @@ Começar agora pela **Sprint 0** com estes passos:
 5. criar exceções de negócio
 
 ### Resultado esperado logo no começo
+
 Quando a Sprint 0 terminar, você terá uma base consistente para continuar sem retrabalho.
 
 ---
@@ -506,6 +576,7 @@ Quando a Sprint 0 terminar, você terá uma base consistente para continuar sem 
 ## 14. Regra de trabalho daqui pra frente
 
 Para não virar bagunça de novo, cada sprint deve seguir este formato:
+
 - objetivo
 - classes a criar/alterar
 - ordem dos commits
@@ -518,6 +589,7 @@ Para não virar bagunça de novo, cada sprint deve seguir este formato:
 ## 15. Como vamos conduzir juntos
 
 Em cada etapa eu posso te passar exatamente:
+
 - quais arquivos criar
 - quais arquivos alterar
 - código sugerido por classe
@@ -526,4 +598,3 @@ Em cada etapa eu posso te passar exatamente:
 - checklist de pronto
 
 Isso evita o caos artesanal que costuma acontecer quando a IA despeja arquitetura, IA, RAG, Docker e promessas metafísicas tudo na mesma resposta.
-
