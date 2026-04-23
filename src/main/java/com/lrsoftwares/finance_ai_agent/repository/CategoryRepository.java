@@ -9,6 +9,15 @@ import com.lrsoftwares.finance_ai_agent.entity.Category;
 import com.lrsoftwares.finance_ai_agent.entity.TransactionType;
 
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
+
     List<Category> findByUserId(UUID userId);
+
     boolean existsByUserIdAndNameIgnoreCaseAndType(UUID userId, String name, TransactionType type);
+
+    boolean existsByUserIdAndNameIgnoreCaseAndTypeAndIdNot(
+            UUID userId,
+            String name,
+            TransactionType type,
+            UUID id
+    );
 }
