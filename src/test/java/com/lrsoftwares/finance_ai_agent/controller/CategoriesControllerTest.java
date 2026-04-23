@@ -42,14 +42,14 @@ class CategoriesControllerTest {
         when(categoryService.salvar(any())).thenReturn(new CategoryResponse(
                 categoryId,
                 userId,
-                "Alimentacao",
+                "Alimentação",
                 TransactionType.EXPENSE,
                 false));
 
         String payload = """
                 {
                   "userId": "11111111-1111-1111-1111-111111111111",
-                  "name": "Alimentacao",
+                                                                        "name": "Alimentação",
                   "type": "EXPENSE"
                 }
                 """;
@@ -60,7 +60,7 @@ class CategoriesControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(categoryId.toString()))
                 .andExpect(jsonPath("$.userId").value(userId.toString()))
-                .andExpect(jsonPath("$.name").value("Alimentacao"))
+                .andExpect(jsonPath("$.name").value("Alimentação"))
                 .andExpect(jsonPath("$.type").value("EXPENSE"))
                 .andExpect(jsonPath("$.systemDefault").value(false));
 
@@ -91,13 +91,13 @@ class CategoriesControllerTest {
         when(categoryService.atualizar(eq(categoryId), any())).thenReturn(new CategoryResponse(
                 categoryId,
                 userId,
-                "Moradia",
+                "Mercado",
                 TransactionType.EXPENSE,
                 false));
 
         String payload = """
                 {
-                  "name": "Moradia",
+                                                                        "name": "Mercado",
                   "type": "EXPENSE"
                 }
                 """;
@@ -106,7 +106,7 @@ class CategoriesControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(payload))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name").value("Moradia"));
+                .andExpect(jsonPath("$.name").value("Mercado"));
 
         verify(categoryService).atualizar(eq(categoryId), any());
     }
