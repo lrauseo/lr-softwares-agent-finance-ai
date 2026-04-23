@@ -1,6 +1,5 @@
 package com.lrsoftwares.finance_ai_agent.controller;
 
-import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.UUID;
 
@@ -39,8 +38,7 @@ public class SummaryController {
                     example = "2026-04"
                 )
             ) @RequestParam @DateTimeFormat(pattern = "yyyy-MM") @NonNull YearMonth monthDate) {
-		LocalDate firstDayOfMonth = monthDate.atDay(1);
-		MonthlySummaryResponse response = summaryService.getMonthlySummary(userId, firstDayOfMonth);
+		MonthlySummaryResponse response = summaryService.getSummaryMonthlyByUserIdAndDate(userId, monthDate);
 		return ResponseEntity.ok(response);
 	}
 

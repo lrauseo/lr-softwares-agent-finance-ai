@@ -2,6 +2,7 @@ package com.lrsoftwares.finance_ai_agent.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -19,6 +20,11 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SummaryService {
 	private final TransactionService transactionService;
+
+	public MonthlySummaryResponse getSummaryMonthlyByUserIdAndDate(@NonNull UUID userId, @NonNull YearMonth monthDate) {
+		LocalDate firstDayOfMonth = monthDate.atDay(1);
+		return getMonthlySummary(userId, firstDayOfMonth);
+	}
 
 	public MonthlySummaryResponse getMonthlySummary(@NonNull UUID userId, @NonNull LocalDate monthDate) {
 		LocalDate startDate = Objects.requireNonNull(monthDate.withDayOfMonth(1));
