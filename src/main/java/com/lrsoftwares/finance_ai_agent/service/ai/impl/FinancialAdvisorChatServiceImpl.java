@@ -2,18 +2,23 @@ package com.lrsoftwares.finance_ai_agent.service.ai.impl;
 
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
 import com.lrsoftwares.finance_ai_agent.dto.FinancialDiagnosisResponse;
 import com.lrsoftwares.finance_ai_agent.dto.chat.ChatAnswerResponse;
 import com.lrsoftwares.finance_ai_agent.dto.chat.ChatQuestionRequest;
+import com.lrsoftwares.finance_ai_agent.entity.ChatMessage;
+import com.lrsoftwares.finance_ai_agent.entity.ChatRole;
+import com.lrsoftwares.finance_ai_agent.service.ChatService;
 import com.lrsoftwares.finance_ai_agent.service.ai.FinancialAdvisorChatService;
 import com.lrsoftwares.finance_ai_agent.service.ai.LLMClient;
 import com.lrsoftwares.finance_ai_agent.service.analysis.FinancialAnalysisService;
 
-import io.micrometer.common.lang.NonNull;
 import jakarta.annotation.Nonnull;
 import lombok.RequiredArgsConstructor;
 
@@ -23,21 +28,26 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 
 	private final FinancialAnalysisService analysisService;
 	private final LLMClient llmClient;
+	private final ChatService chatService;
 
 	@Override
-	public ChatAnswerResponse answer(@NonNull ChatQuestionRequest request) {
+	public ChatAnswerResponse answer(@NonNull UUID sessionId, @NonNull ChatQuestionRequest request) {
+		chatService.saveMessage(sessionId, ChatRole.USER, request.question());
+		List<ChatMessage> history = chatService.getMessages(sessionId);
 		@Nonnull
 		YearMonth currentMonth = Objects.requireNonNull(YearMonth.now(), "Não foi possível obter o mês atual");
 
 		FinancialDiagnosisResponse analysis = analysisService.analyzeMonthly(request.userId(), currentMonth);
 
-		String context = buildContext(analysis);
+		String context = buildFullContext(history, analysis);
 
 		String userPrompt = Objects.requireNonNull(buildUserPrompt(request.question()),
 				"Não foi possível construir o prompt do usuário");
 		String systemPrompt = Objects.requireNonNull(buildSystemPrompt(context),
 				"Não foi possível construir o prompt do sistema");
 		String response = llmClient.generate(systemPrompt, userPrompt);
+
+		chatService.saveMessage(sessionId, ChatRole.ASSISTANT, response);
 		if (response == null) {
 			response = "Desculpe, não consegui gerar uma resposta no momento.";
 		}
@@ -45,6 +55,23 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 				response,
 				currentMonth,
 				Objects.requireNonNull(LocalDateTime.now(), "Não foi possível obter a data e hora atuais"));
+	}
+
+	private String buildFullContext(List<ChatMessage> history, FinancialDiagnosisResponse analysis) {
+
+		StringBuilder sb = new StringBuilder();
+		sb.append("Histórico da conversa:\n");
+		history.stream()
+				.limit(10) // não seja irresponsável
+				.forEach(msg -> sb.append(msg.getRole())
+						.append(": ")
+						.append(msg.getContent())
+						.append("\n"));
+
+		sb.append("\n---\n");
+		sb.append(buildContext(analysis));
+		return sb.toString();
+
 	}
 
 	private String buildContext(FinancialDiagnosisResponse analysis) {
