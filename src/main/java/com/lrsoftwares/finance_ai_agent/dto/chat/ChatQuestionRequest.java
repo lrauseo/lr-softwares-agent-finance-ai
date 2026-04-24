@@ -1,4 +1,4 @@
-package com.lrsoftwares.finance_ai_agent.dto;
+package com.lrsoftwares.finance_ai_agent.dto.chat;
 
 import java.util.UUID;
 

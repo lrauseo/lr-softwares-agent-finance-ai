@@ -18,10 +18,12 @@ spring:
 
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY}
+      api-key: ${AI_API_KEY:${OPENAI_API_KEY:}}
+      base-url: ${AI_BASE_URL:https://api.openai.com}
       chat:
+        completions-path: ${AI_CHAT_COMPLETIONS_PATH:/v1/chat/completions}
         options:
-          model: gpt-4.1-mini
+          model: ${AI_MODEL:gpt-4.1-mini}
 
 springdoc:
   api-docs:
