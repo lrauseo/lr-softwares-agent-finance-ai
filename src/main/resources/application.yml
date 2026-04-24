@@ -42,3 +42,12 @@ management:
 
 server:
   port: 8080
+
+app:
+  knowledge:
+    docs-path: docs/rag
+    seed:
+      enabled: false
+      overwrite: true
+      language: pt-BR
+      audience: BEGINNER

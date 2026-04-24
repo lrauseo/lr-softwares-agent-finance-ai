@@ -9,6 +9,10 @@ import com.lrsoftwares.finance_ai_agent.entity.rag.KnowledgeChunk;
 
 public interface KnowledgeChunkRepository extends JpaRepository<KnowledgeChunk, UUID> {
 
+	boolean existsBySource(String source);
+
+	void deleteBySource(String source);
+
 	List<KnowledgeChunk> findTop5ByLanguageAndContentContainingIgnoreCase(
 			String language,
 			String query);
