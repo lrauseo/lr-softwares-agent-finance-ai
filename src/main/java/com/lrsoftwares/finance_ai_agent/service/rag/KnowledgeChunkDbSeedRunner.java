@@ -12,10 +12,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
-import com.lrsoftwares.finance_ai_agent.entity.rag.KnowledgeChunk;
-import com.lrsoftwares.finance_ai_agent.repository.rag.KnowledgeChunkRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -25,7 +21,7 @@ public class KnowledgeChunkDbSeedRunner implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(KnowledgeChunkDbSeedRunner.class);
 
-    private final KnowledgeChunkRepository repository;
+    private final KnowledgeIngestionService ingestionService;
 
     @Value("${app.knowledge.seed.enabled:true}")
     private boolean seedEnabled;
@@ -43,7 +39,6 @@ public class KnowledgeChunkDbSeedRunner implements CommandLineRunner {
     private boolean overwrite;
 
     @Override
-    @Transactional
     public void run(String... args) {
         if (!seedEnabled) {
             log.info("Knowledge DB seed desabilitado.");
@@ -74,37 +69,24 @@ public class KnowledgeChunkDbSeedRunner implements CommandLineRunner {
         for (Path file : markdownFiles) {
             String source = file.getFileName().toString();
 
-            if (!overwrite && repository.existsBySource(source)) {
-                skipped++;
-                continue;
-            }
-
-            String content;
             try {
-                content = Files.readString(file, StandardCharsets.UTF_8);
-            } catch (IOException ex) {
-                log.warn("Falha ao ler arquivo de seed: {}", source, ex);
-                continue;
-            }
+                if (isBlankFile(file, source)) {
+                    skipped++;
+                    continue;
+                }
 
-            if (content.isBlank()) {
-                log.warn("Arquivo de seed vazio ignorado: {}", source);
-                skipped++;
-                continue;
-            }
+                int previousCount = ingestionService.ingestDocumentsFromRepository(
+                        List.of(source),
+                        resolveTheme(source),
+                        defaultAudience,
+                        defaultLanguage,
+                        overwrite)
+                        .size();
 
-            if (overwrite) {
-                repository.deleteBySource(source);
+                inserted += previousCount;
+            } catch (RuntimeException ex) {
+                log.warn("Falha ao ingerir arquivo de seed: {}", source, ex);
             }
-
-            KnowledgeChunk chunk = new KnowledgeChunk();
-            chunk.setSource(source);
-            chunk.setTheme(resolveTheme(source));
-            chunk.setAudience(defaultAudience);
-            chunk.setLanguage(defaultLanguage);
-            chunk.setContent(content);
-            repository.save(chunk);
-            inserted++;
         }
 
         log.info("Seed de knowledge finalizado. Inseridos: {} | Ignorados: {} | Diretorio: {}",
@@ -116,5 +98,22 @@ public class KnowledgeChunkDbSeedRunner implements CommandLineRunner {
     private String resolveTheme(String source) {
         String baseName = source.endsWith(".md") ? source.substring(0, source.length() - 3) : source;
         return baseName.replace('-', '_').toUpperCase(Locale.ROOT);
+    }
+
+    private boolean isBlankFile(Path file, String source) {
+        String content;
+        try {
+            content = Files.readString(file, StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            log.warn("Falha ao ler arquivo de seed: {}", source, ex);
+            return true;
+        }
+
+        if (content.isBlank()) {
+            log.warn("Arquivo de seed vazio ignorado: {}", source);
+            return true;
+        }
+
+        return false;
     }
 }

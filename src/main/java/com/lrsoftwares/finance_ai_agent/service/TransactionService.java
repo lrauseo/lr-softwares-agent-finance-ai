@@ -2,6 +2,7 @@ package com.lrsoftwares.finance_ai_agent.service;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -28,7 +29,7 @@ public class TransactionService {
     private final CategoryRepository categoryRepository;
 
     public TransactionResponse salvar(CreateTransactionRequest request) {
-        Category category = categoryRepository.findById(request.categoryId())
+        Category category = categoryRepository.findById(Objects.requireNonNull(request.categoryId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada."));
 
         validarCategoriaParaTransacao(category, request.userId(), request.type());
@@ -47,16 +48,16 @@ public class TransactionService {
     }
 
     public TransactionResponse buscarPorId(UUID id) {
-        return transactionRepository.findById(id)
+        return transactionRepository.findById(Objects.requireNonNull(id))
                 .map(transactionMapper::toDto)
                 .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada."));
     }
 
     public TransactionResponse atualizar(UUID id, UpdateTransactionRequest request) {
-        Transaction transaction = transactionRepository.findById(id)
+        Transaction transaction = transactionRepository.findById(Objects.requireNonNull(id))
                 .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada."));
 
-        Category category = categoryRepository.findById(request.categoryId())
+        Category category = categoryRepository.findById(Objects.requireNonNull(request.categoryId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada."));
 
         validarCategoriaParaTransacao(category, transaction.getUserId(), request.type());
@@ -72,10 +73,10 @@ public class TransactionService {
     }
 
     public void deletar(UUID id) {
-        Transaction transaction = transactionRepository.findById(id)
+        Transaction transaction = transactionRepository.findById(Objects.requireNonNull(id))
                 .orElseThrow(() -> new ResourceNotFoundException("Transação não encontrada."));
 
-        transactionRepository.delete(transaction);
+        transactionRepository.delete(Objects.requireNonNull(transaction));
     }
 
     private void validarCategoriaParaTransacao(Category category, UUID userId, com.lrsoftwares.finance_ai_agent.entity.TransactionType type) {

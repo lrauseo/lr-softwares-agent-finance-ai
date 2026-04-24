@@ -24,6 +24,17 @@ spring:
         completions-path: ${AI_CHAT_COMPLETIONS_PATH:/v1/chat/completions}
         options:
           model: ${AI_MODEL:gpt-4.1-mini}
+      embedding:
+        embeddings-path: ${AI_EMBEDDINGS_PATH:/v1/embeddings}
+        options:
+          model: ${AI_EMBEDDING_MODEL:text-embedding-3-small}
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 1536
+        table-name: vector_store
 
 springdoc:
   api-docs:
@@ -47,7 +58,7 @@ app:
   knowledge:
     docs-path: docs/rag
     seed:
-      enabled: false
+      enabled: true
       overwrite: true
       language: pt-BR
       audience: BEGINNER

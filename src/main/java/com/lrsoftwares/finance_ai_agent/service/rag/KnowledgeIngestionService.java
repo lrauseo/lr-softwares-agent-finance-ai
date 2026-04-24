@@ -5,11 +5,19 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 
+import org.springframework.ai.document.Document;
+import org.springframework.ai.transformer.splitter.TokenTextSplitter;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.lrsoftwares.finance_ai_agent.dto.rag.CreateKnowledgeChunkRequest;
@@ -24,139 +32,224 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class KnowledgeIngestionService {
 
-    private static final String DEFAULT_LANGUAGE = "pt-BR";
-    private static final String DEFAULT_AUDIENCE = "BEGINNER";
+	private static final String DEFAULT_LANGUAGE = "pt-BR";
+	private static final String DEFAULT_AUDIENCE = "BEGINNER";
 
-    private final KnowledgeChunkRepository repository;
+	private final KnowledgeChunkRepository repository;
+	private final VectorStore vectorStore;
 
-    @Value("${app.knowledge.docs-path:docs/rag}")
-    private String docsPath;
+	@Value("${app.knowledge.docs-path:docs/rag}")
+	private String docsPath;
 
-    public KnowledgeChunk ingest(CreateKnowledgeChunkRequest request) {
-        KnowledgeChunk chunk = new KnowledgeChunk();
-        chunk.setSource(request.source());
-        chunk.setTheme(request.theme());
-        chunk.setAudience(request.audience());
-        chunk.setLanguage(request.language());
-        chunk.setContent(request.content());
-        return repository.save(chunk);
-    }
+	public KnowledgeChunk ingest(CreateKnowledgeChunkRequest request) {
+		String content = request.content();
+		String resolvedTheme = resolveTheme(request.theme(), request.source());
+		String resolvedAudience = resolveAudience(request.audience());
+		String resolvedLanguage = resolveLanguage(request.language());
 
-    public List<KnowledgeChunk> ingestDocuments(List<MultipartFile> files, String theme, String audience, String language) {
-        if (files == null || files.isEmpty()) {
-            throw new BusinessException("Informe ao menos um arquivo para ingestao");
-        }
+		List<Document> documents = buildDocuments(
+				Objects.requireNonNull(content),
+				request.source(),
+				resolvedTheme,
+				resolvedAudience,
+				resolvedLanguage);
 
-        List<KnowledgeChunk> chunks = new ArrayList<>();
-        for (MultipartFile file : files) {
-            String normalizedSource = validateMultipartSource(file);
-            if (file.isEmpty()) {
-                throw new BusinessException("Arquivo vazio nao pode ser ingerido: " + normalizedSource);
-            }
+		vectorStore.add(Objects.requireNonNull(documents));
 
-            String content = readMultipartContent(file, normalizedSource);
-            KnowledgeChunk chunk = new KnowledgeChunk();
-            chunk.setSource(normalizedSource);
-            chunk.setTheme(resolveTheme(theme, normalizedSource));
-            chunk.setAudience(resolveAudience(audience));
-            chunk.setLanguage(resolveLanguage(language));
-            chunk.setContent(content);
-            chunks.add(repository.save(chunk));
-        }
-        return chunks;
-    }
+		KnowledgeChunk chunk = new KnowledgeChunk();
+		chunk.setSource(request.source());
+		chunk.setTheme(request.theme());
+		chunk.setAudience(request.audience());
+		chunk.setLanguage(request.language());
+		chunk.setContent(request.content());
+		return repository.save(chunk);
+	}
 
-    public List<KnowledgeChunk> ingestDocumentsFromRepository(
-            List<String> sources,
-            String theme,
-            String audience,
-            String language) {
-        if (sources == null || sources.isEmpty()) {
-            throw new BusinessException("Informe ao menos um documento para ingestao");
-        }
+	public List<KnowledgeChunk> ingestDocuments(List<MultipartFile> files, String theme, String audience,
+			String language) {
+		if (files == null || files.isEmpty()) {
+			throw new BusinessException("Informe ao menos um arquivo para ingestao");
+		}
 
-        List<KnowledgeChunk> chunks = new ArrayList<>();
-        for (String source : sources) {
-            String normalizedSource = validateSource(source);
-            Path filePath = Path.of(docsPath, normalizedSource);
-            if (!Files.exists(filePath)) {
-                throw new ResourceNotFoundException("Documento nao encontrado: " + normalizedSource);
-            }
+		List<KnowledgeChunk> chunks = new ArrayList<>();
+		for (MultipartFile file : files) {
+			String normalizedSource = validateMultipartSource(file);
+			if (file.isEmpty()) {
+				throw new BusinessException("Arquivo vazio nao pode ser ingerido: " + normalizedSource);
+			}
+			String content = readMultipartContent(file, normalizedSource);
+			String resolvedTheme = resolveTheme(theme, normalizedSource);
+			String resolvedAudience = resolveAudience(audience);
+			String resolvedLanguage = resolveLanguage(language);
 
-            String content = readContent(filePath, normalizedSource);
-            KnowledgeChunk chunk = new KnowledgeChunk();
-            chunk.setSource(normalizedSource);
-            chunk.setTheme(resolveTheme(theme, normalizedSource));
-            chunk.setAudience(resolveAudience(audience));
-            chunk.setLanguage(resolveLanguage(language));
-            chunk.setContent(content);
-            chunks.add(repository.save(chunk));
-        }
-        return chunks;
-    }
+			List<Document> documents = buildDocuments(
+					Objects.requireNonNull(content),
+					normalizedSource,
+					resolvedTheme,
+					resolvedAudience,
+					resolvedLanguage);
 
-    private String validateSource(String source) {
-        if (source == null || source.isBlank()) {
-            throw new BusinessException("A lista de documentos possui item vazio");
-        }
-        if (!source.endsWith(".md")) {
-            throw new BusinessException("Somente arquivos .md sao permitidos: " + source);
-        }
-        if (source.contains("..") || source.contains("/") || source.contains("\\")) {
-            throw new BusinessException("Nome de documento invalido: " + source);
-        }
-        return source;
-    }
+			vectorStore.add(Objects.requireNonNull(documents));
 
-    private String validateMultipartSource(MultipartFile file) {
-        if (file == null) {
-            throw new BusinessException("A lista de arquivos possui item nulo");
-        }
+			KnowledgeChunk chunk = new KnowledgeChunk();
+			chunk.setSource(normalizedSource);
+			chunk.setTheme(resolvedTheme);
+			chunk.setAudience(resolvedAudience);
+			chunk.setLanguage(resolvedLanguage);
+			chunk.setContent(content);
+			chunks.add(repository.save(chunk));
+		}
+		return chunks;
+	}
 
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null || originalFilename.isBlank()) {
-            throw new BusinessException("Arquivo enviado sem nome");
-        }
+	public List<KnowledgeChunk> ingestDocumentsFromRepository(
+			List<String> sources,
+			String theme,
+			String audience,
+			String language) {
+		return ingestDocumentsFromRepository(sources, theme, audience, language, false);
+	}
 
-        String fileName = Path.of(originalFilename).getFileName().toString();
-        return validateSource(fileName);
-    }
+	@Transactional
+	public List<KnowledgeChunk> ingestDocumentsFromRepository(
+			List<String> sources,
+			String theme,
+			String audience,
+			String language,
+			boolean overwriteExisting) {
+		if (sources == null || sources.isEmpty()) {
+			throw new BusinessException("Informe ao menos um documento para ingestao");
+		}
 
-    private String readContent(Path filePath, String source) {
-        try {
-            return Files.readString(filePath, StandardCharsets.UTF_8);
-        } catch (IOException ex) {
-            throw new BusinessException("Nao foi possivel ler o documento: " + source);
-        }
-    }
+		List<KnowledgeChunk> chunks = new ArrayList<>();
+		for (String source : sources) {
+			String normalizedSource = validateSource(source);
+			Path filePath = Path.of(docsPath, normalizedSource);
+			if (!Files.exists(filePath)) {
+				throw new ResourceNotFoundException("Documento nao encontrado: " + normalizedSource);
+			}
 
-    private String readMultipartContent(MultipartFile file, String source) {
-        try {
-            return new String(file.getBytes(), StandardCharsets.UTF_8);
-        } catch (IOException ex) {
-            throw new BusinessException("Nao foi possivel ler o documento: " + source);
-        }
-    }
+			if (overwriteExisting) {
+				deleteExistingBySource(normalizedSource);
+			}
 
-    private String resolveTheme(String requestTheme, String source) {
-        if (requestTheme != null && !requestTheme.isBlank()) {
-            return requestTheme;
-        }
-        String baseName = source.replace(".md", "");
-        return baseName.replace('-', '_').toUpperCase(Locale.ROOT);
-    }
+			String content = readContent(filePath, normalizedSource);
+			String resolvedTheme = resolveTheme(theme, normalizedSource);
+			String resolvedAudience = resolveAudience(audience);
+			String resolvedLanguage = resolveLanguage(language);
 
-    private String resolveAudience(String audience) {
-        if (audience == null || audience.isBlank()) {
-            return DEFAULT_AUDIENCE;
-        }
-        return audience;
-    }
+			List<Document> documents = buildDocuments(
+					Objects.requireNonNull(content),
+					normalizedSource,
+					resolvedTheme,
+					resolvedAudience,
+					resolvedLanguage);
 
-    private String resolveLanguage(String language) {
-        if (language == null || language.isBlank()) {
-            return DEFAULT_LANGUAGE;
-        }
-        return language;
-    }
+			vectorStore.add(Objects.requireNonNull(documents));
+			KnowledgeChunk chunk = new KnowledgeChunk();
+			chunk.setSource(normalizedSource);
+			chunk.setTheme(resolvedTheme);
+			chunk.setAudience(resolvedAudience);
+			chunk.setLanguage(resolvedLanguage);
+			chunk.setContent(content);
+			chunks.add(repository.save(chunk));
+		}
+		return chunks;
+	}
+
+	private void deleteExistingBySource(String source) {
+		vectorStore.delete("source == '" + source + "'");
+		repository.deleteBySource(source);
+	}
+
+	private String validateSource(String source) {
+		if (source == null || source.isBlank()) {
+			throw new BusinessException("A lista de documentos possui item vazio");
+		}
+		if (!source.endsWith(".md")) {
+			throw new BusinessException("Somente arquivos .md sao permitidos: " + source);
+		}
+		if (source.contains("..") || source.contains("/") || source.contains("\\")) {
+			throw new BusinessException("Nome de documento invalido: " + source);
+		}
+		return source;
+	}
+
+	private String validateMultipartSource(MultipartFile file) {
+		if (file == null) {
+			throw new BusinessException("A lista de arquivos possui item nulo");
+		}
+
+		String originalFilename = file.getOriginalFilename();
+		if (originalFilename == null || originalFilename.isBlank()) {
+			throw new BusinessException("Arquivo enviado sem nome");
+		}
+
+		String fileName = Path.of(originalFilename).getFileName().toString();
+		return validateSource(fileName);
+	}
+
+	private String readContent(Path filePath, String source) {
+		try {
+			return Files.readString(filePath, StandardCharsets.UTF_8);
+		} catch (IOException ex) {
+			throw new BusinessException("Nao foi possivel ler o documento: " + source);
+		}
+	}
+
+	private String readMultipartContent(MultipartFile file, String source) {
+		try {
+			return new String(file.getBytes(), StandardCharsets.UTF_8);
+		} catch (IOException ex) {
+			throw new BusinessException("Nao foi possivel ler o documento: " + source);
+		}
+	}
+
+	private String resolveTheme(String requestTheme, String source) {
+		if (requestTheme != null && !requestTheme.isBlank()) {
+			return requestTheme;
+		}
+		String baseName = source.replace(".md", "");
+		return baseName.replace('-', '_').toUpperCase(Locale.ROOT);
+	}
+
+	private String resolveAudience(String audience) {
+		if (audience == null || audience.isBlank()) {
+			return DEFAULT_AUDIENCE;
+		}
+		return audience;
+	}
+
+	private String resolveLanguage(String language) {
+		if (language == null || language.isBlank()) {
+			return DEFAULT_LANGUAGE;
+		}
+		return language;
+	}
+
+	private List<Document> buildDocuments(
+			@NonNull String content,
+			String source,
+			String theme,
+			String audience,
+			String language) {
+		Map<String, Object> metadados = new HashMap<>();
+
+		if (Objects.nonNull(source)) {
+			metadados.put("source", source);
+		}
+		if (Objects.nonNull(theme)) {
+			metadados.put("theme", theme);
+		}
+		if (Objects.nonNull(audience)) {
+			metadados.put("audience", audience);
+		}
+		if (Objects.nonNull(language)) {
+			metadados.put("language", language);
+		}
+
+		Document document = new Document(content, metadados);
+		TokenTextSplitter splitter = new TokenTextSplitter();
+		return splitter.apply(List.of(document));
+	}
 }

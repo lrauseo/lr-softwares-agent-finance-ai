@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.springframework.ai.document.Document;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
@@ -14,7 +15,6 @@ import com.lrsoftwares.finance_ai_agent.dto.chat.ChatAnswerResponse;
 import com.lrsoftwares.finance_ai_agent.dto.chat.ChatQuestionRequest;
 import com.lrsoftwares.finance_ai_agent.entity.ChatMessage;
 import com.lrsoftwares.finance_ai_agent.entity.ChatRole;
-import com.lrsoftwares.finance_ai_agent.entity.rag.KnowledgeChunk;
 import com.lrsoftwares.finance_ai_agent.service.ChatService;
 import com.lrsoftwares.finance_ai_agent.service.ai.FinancialAdvisorChatService;
 import com.lrsoftwares.finance_ai_agent.service.ai.LLMClient;
@@ -41,7 +41,7 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 		YearMonth currentMonth = Objects.requireNonNull(YearMonth.now(), "Não foi possível obter o mês atual");
 
 		FinancialDiagnosisResponse analysis = analysisService.analyzeMonthly(request.userId(), currentMonth);
-		var retrievedChunks = knowledgeRetrievalService.retrieve(request.question());
+		var retrievedChunks = knowledgeRetrievalService.retrieve(Objects.requireNonNull(request.question()));
 		String context = buildFullContext(history, analysis, retrievedChunks);
 
 		String userPrompt = Objects.requireNonNull(buildUserPrompt(request.question()),
@@ -61,7 +61,7 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 	}
 
 	private String buildFullContext(List<ChatMessage> history, FinancialDiagnosisResponse analysis,
-			List<KnowledgeChunk> retrievedChunks) {
+			List<Document> retrievedChunks) {
 
 		StringBuilder sb = new StringBuilder();
 		sb.append("Histórico da conversa:\n");
@@ -80,19 +80,22 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 
 	}
 
-	private String buildKnowledgeContext(List<KnowledgeChunk> chunks) {
-		if (chunks.isEmpty()) {
+	private String buildKnowledgeContext(List<Document> chunks) {
+		if (chunks == null || chunks.isEmpty()) {
 			return "Nenhum conteúdo interno relevante encontrado.";
 		}
 
 		StringBuilder sb = new StringBuilder();
-
 		sb.append("Conhecimento interno recuperado:\n");
 
-		chunks.forEach(chunk -> {
-			sb.append("- Fonte: ").append(chunk.getSource()).append("\n");
-			sb.append("  Tema: ").append(chunk.getTheme()).append("\n");
-			sb.append("  Conteúdo: ").append(chunk.getContent()).append("\n\n");
+		chunks.forEach(doc -> {
+			var metadata = doc.getMetadata();
+
+			sb.append("- Fonte: ").append(metadata.get("source")).append("\n");
+			sb.append("  Tema: ").append(metadata.get("theme")).append("\n");
+			sb.append("  Audiência: ").append(metadata.get("audience")).append("\n");
+			sb.append("  Idioma: ").append(metadata.get("language")).append("\n");
+			sb.append("  Conteúdo: ").append(doc.getText()).append("\n\n");
 		});
 
 		return sb.toString();

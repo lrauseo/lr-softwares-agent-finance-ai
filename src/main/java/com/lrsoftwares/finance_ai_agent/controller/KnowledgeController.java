@@ -2,6 +2,7 @@ package com.lrsoftwares.finance_ai_agent.controller;
 
 import java.util.List;
 
+import org.springframework.ai.document.Document;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -54,13 +55,13 @@ public class KnowledgeController {
     }
 
     @GetMapping("/search")
-    public List<KnowledgeChunkResponse> search(
+    public List<String> search(
             @RequestParam String query,
             @RequestParam(defaultValue = "pt-BR") String language,
             @RequestParam(required = false) List<String> sources) {
         return retrievalService.search(query, language, sources)
                 .stream()
-                .map(this::toResponse)
+                .map(Document::getText)
                 .toList();
     }
 
