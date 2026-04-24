@@ -17,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.lrsoftwares.finance_ai_agent.dto.rag.CreateKnowledgeChunkRequest;
 import com.lrsoftwares.finance_ai_agent.dto.rag.IngestKnowledgeDocumentsResponse;
 import com.lrsoftwares.finance_ai_agent.dto.rag.KnowledgeChunkResponse;
+import com.lrsoftwares.finance_ai_agent.dto.rag.KnowledgeSearchResponse;
 import com.lrsoftwares.finance_ai_agent.entity.rag.KnowledgeChunk;
 import com.lrsoftwares.finance_ai_agent.service.rag.KnowledgeIngestionService;
 import com.lrsoftwares.finance_ai_agent.service.rag.KnowledgeRetrievalService;
@@ -55,14 +56,11 @@ public class KnowledgeController {
     }
 
     @GetMapping("/search")
-    public List<String> search(
+    public List<KnowledgeSearchResponse> search(
             @RequestParam String query,
             @RequestParam(defaultValue = "pt-BR") String language,
             @RequestParam(required = false) List<String> sources) {
-        return retrievalService.search(query, language, sources)
-                .stream()
-                .map(Document::getText)
-                .toList();
+        return retrievalService.search(query, language, sources);               
     }
 
     private KnowledgeChunkResponse toResponse(KnowledgeChunk chunk) {
