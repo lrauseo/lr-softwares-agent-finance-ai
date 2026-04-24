@@ -14,10 +14,12 @@ import com.lrsoftwares.finance_ai_agent.dto.chat.ChatAnswerResponse;
 import com.lrsoftwares.finance_ai_agent.dto.chat.ChatQuestionRequest;
 import com.lrsoftwares.finance_ai_agent.entity.ChatMessage;
 import com.lrsoftwares.finance_ai_agent.entity.ChatRole;
+import com.lrsoftwares.finance_ai_agent.entity.rag.KnowledgeChunk;
 import com.lrsoftwares.finance_ai_agent.service.ChatService;
 import com.lrsoftwares.finance_ai_agent.service.ai.FinancialAdvisorChatService;
 import com.lrsoftwares.finance_ai_agent.service.ai.LLMClient;
 import com.lrsoftwares.finance_ai_agent.service.analysis.FinancialAnalysisService;
+import com.lrsoftwares.finance_ai_agent.service.rag.KnowledgeRetrievalService;
 
 import jakarta.annotation.Nonnull;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 	private final FinancialAnalysisService analysisService;
 	private final LLMClient llmClient;
 	private final ChatService chatService;
+	private final KnowledgeRetrievalService knowledgeRetrievalService;
 
 	@Override
 	public ChatAnswerResponse answer(@NonNull UUID sessionId, @NonNull ChatQuestionRequest request) {
@@ -38,8 +41,8 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 		YearMonth currentMonth = Objects.requireNonNull(YearMonth.now(), "Não foi possível obter o mês atual");
 
 		FinancialDiagnosisResponse analysis = analysisService.analyzeMonthly(request.userId(), currentMonth);
-
-		String context = buildFullContext(history, analysis);
+		var retrievedChunks = knowledgeRetrievalService.retrieve(request.question());
+		String context = buildFullContext(history, analysis, retrievedChunks);
 
 		String userPrompt = Objects.requireNonNull(buildUserPrompt(request.question()),
 				"Não foi possível construir o prompt do usuário");
@@ -57,7 +60,8 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 				Objects.requireNonNull(LocalDateTime.now(), "Não foi possível obter a data e hora atuais"));
 	}
 
-	private String buildFullContext(List<ChatMessage> history, FinancialDiagnosisResponse analysis) {
+	private String buildFullContext(List<ChatMessage> history, FinancialDiagnosisResponse analysis,
+			List<KnowledgeChunk> retrievedChunks) {
 
 		StringBuilder sb = new StringBuilder();
 		sb.append("Histórico da conversa:\n");
@@ -70,8 +74,28 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 
 		sb.append("\n---\n");
 		sb.append(buildContext(analysis));
+		sb.append("\n---\n");
+		sb.append(buildKnowledgeContext(retrievedChunks));
 		return sb.toString();
 
+	}
+
+	private String buildKnowledgeContext(List<KnowledgeChunk> chunks) {
+		if (chunks.isEmpty()) {
+			return "Nenhum conteúdo interno relevante encontrado.";
+		}
+
+		StringBuilder sb = new StringBuilder();
+
+		sb.append("Conhecimento interno recuperado:\n");
+
+		chunks.forEach(chunk -> {
+			sb.append("- Fonte: ").append(chunk.getSource()).append("\n");
+			sb.append("  Tema: ").append(chunk.getTheme()).append("\n");
+			sb.append("  Conteúdo: ").append(chunk.getContent()).append("\n\n");
+		});
+
+		return sb.toString();
 	}
 
 	private String buildContext(FinancialDiagnosisResponse analysis) {
@@ -122,7 +146,7 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 
 				DADOS DO USUÁRIO:
 				%s
-
+				RESPONDA EM PORTUGUÊS BRASILEIRO.
 				""".formatted(context);
 
 	}
