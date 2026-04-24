@@ -49,7 +49,7 @@ public class SummaryService {
 				.entrySet().stream()
 				.map(entry -> new CategoryTotalResponse(entry.getKey(), entry.getValue()))
 				.toList();
-		var balance = totalIncome.subtract(totalExpense);
+		var balance = totalIncome.subtract(totalExpense.abs());
 
 		return new MonthlySummaryResponse(totalIncome, totalExpense, balance, categoryTotals);
 	}
