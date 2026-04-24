@@ -28,9 +28,11 @@ import com.lrsoftwares.finance_ai_agent.dto.chat.ChatQuestionRequest;
 import com.lrsoftwares.finance_ai_agent.entity.AlertSeverity;
 import com.lrsoftwares.finance_ai_agent.entity.ChatMessage;
 import com.lrsoftwares.finance_ai_agent.entity.ChatRole;
+import com.lrsoftwares.finance_ai_agent.entity.rag.KnowledgeChunk;
 import com.lrsoftwares.finance_ai_agent.service.ChatService;
 import com.lrsoftwares.finance_ai_agent.service.ai.LLMClient;
 import com.lrsoftwares.finance_ai_agent.service.analysis.FinancialAnalysisService;
+import com.lrsoftwares.finance_ai_agent.service.rag.KnowledgeRetrievalService;
 
 @ExtendWith(MockitoExtension.class)
 class FinancialAdvisorChatServiceImplTest {
@@ -44,11 +46,18 @@ class FinancialAdvisorChatServiceImplTest {
     @Mock
     private ChatService chatService;
 
+    @Mock
+    private KnowledgeRetrievalService knowledgeRetrievalService;
+
     private FinancialAdvisorChatServiceImpl advisorService;
 
     @BeforeEach
     void setUp() {
-        advisorService = new FinancialAdvisorChatServiceImpl(analysisService, llmClient, chatService);
+        advisorService = new FinancialAdvisorChatServiceImpl(
+                analysisService,
+                llmClient,
+                chatService,
+                knowledgeRetrievalService);
     }
 
     @Test
@@ -75,6 +84,7 @@ class FinancialAdvisorChatServiceImplTest {
 
         when(chatService.getMessages(sessionId)).thenReturn(List.of(previousUser, previousAssistant, currentUser));
         when(analysisService.analyzeMonthly(eq(userId), any(YearMonth.class))).thenReturn(buildDiagnosis(userId));
+        when(knowledgeRetrievalService.retrieve("Como melhorar meu saldo?")).thenReturn(List.of(buildChunk()));
         when(llmClient.generate(any(String.class), any(String.class))).thenReturn("Comece cortando 15% dos gastos variaveis.");
 
         ChatAnswerResponse response = advisorService.answer(sessionId, request);
@@ -94,6 +104,7 @@ class FinancialAdvisorChatServiceImplTest {
         assertThat(systemPrompt).contains("USER: No mes passado gastei muito em delivery.");
         assertThat(systemPrompt).contains("ASSISTANT: Vamos definir um limite semanal para alimentacao.");
         assertThat(systemPrompt).contains("Receita total:");
+        assertThat(systemPrompt).contains("Conhecimento interno recuperado:");
         assertThat(userPrompt).contains("Como melhorar meu saldo?");
 
         verify(chatService).saveMessage(sessionId, ChatRole.USER, "Como melhorar meu saldo?");
@@ -109,6 +120,7 @@ class FinancialAdvisorChatServiceImplTest {
         ChatQuestionRequest secondQuestion = new ChatQuestionRequest(userId, "Segunda pergunta");
 
         when(analysisService.analyzeMonthly(eq(userId), any(YearMonth.class))).thenReturn(buildDiagnosis(userId));
+        when(knowledgeRetrievalService.retrieve(any(String.class))).thenReturn(List.of(buildChunk()));
 
         when(chatService.getMessages(sessionId))
                 .thenReturn(List.of(message(ChatRole.USER, "Primeira pergunta")))
@@ -168,5 +180,14 @@ class FinancialAdvisorChatServiceImplTest {
         message.setRole(role);
         message.setContent(content);
         return message;
+    }
+
+    private KnowledgeChunk buildChunk() {
+        KnowledgeChunk chunk = new KnowledgeChunk();
+        chunk.setSource("reserva-emergencia.md");
+        chunk.setTheme("RESERVA_EMERGENCIA");
+        chunk.setContent("Reserva de emergencia cobre imprevistos.");
+        chunk.setLanguage("pt-BR");
+        return chunk;
     }
 }
