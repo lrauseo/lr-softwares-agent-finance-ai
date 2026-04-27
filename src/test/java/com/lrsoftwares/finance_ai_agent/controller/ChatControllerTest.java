@@ -46,7 +46,7 @@ class ChatControllerTest {
         session.setCreatedAt(LocalDateTime.of(2026, 4, 24, 10, 0));
         session.setUpdatedAt(LocalDateTime.of(2026, 4, 24, 10, 0));
 
-        when(chatService.createSession(userId)).thenReturn(session);
+        when(chatService.createSession()).thenReturn(session);
 
         mockMvc.perform(post("/api/chat/sessions")
                         .param("userId", userId.toString()))
@@ -55,7 +55,7 @@ class ChatControllerTest {
                 .andExpect(jsonPath("$.userId").value(userId.toString()))
                 .andExpect(jsonPath("$.title").value("Nova conversa"));
 
-        verify(chatService).createSession(userId);
+        verify(chatService).createSession();
     }
 
     @Test
@@ -76,7 +76,7 @@ class ChatControllerTest {
         second.setCreatedAt(LocalDateTime.of(2026, 4, 21, 9, 0));
         second.setUpdatedAt(LocalDateTime.of(2026, 4, 21, 9, 0));
 
-        when(chatService.listSessions(userId)).thenReturn(List.of(first, second));
+        when(chatService.listSessions()).thenReturn(List.of(first, second));
 
         mockMvc.perform(get("/api/chat/sessions")
                         .param("userId", userId.toString()))
@@ -85,7 +85,7 @@ class ChatControllerTest {
                 .andExpect(jsonPath("$[0].title").value("Conversa 1"))
                 .andExpect(jsonPath("$[1].title").value("Conversa 2"));
 
-        verify(chatService).listSessions(userId);
+        verify(chatService).listSessions();
     }
 
     @Test

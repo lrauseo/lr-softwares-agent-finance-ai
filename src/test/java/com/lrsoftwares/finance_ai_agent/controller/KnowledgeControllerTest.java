@@ -18,6 +18,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.lrsoftwares.finance_ai_agent.dto.rag.KnowledgeSearchResponse;
 import com.lrsoftwares.finance_ai_agent.entity.rag.KnowledgeChunk;
 import com.lrsoftwares.finance_ai_agent.service.rag.KnowledgeIngestionService;
 import com.lrsoftwares.finance_ai_agent.service.rag.KnowledgeRetrievalService;
@@ -101,10 +102,13 @@ class KnowledgeControllerTest {
 
     @Test
     void shouldSearchKnowledgeChunks() throws Exception {
-        KnowledgeChunk result = buildChunk(
-                UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+        KnowledgeSearchResponse result = new KnowledgeSearchResponse(
+                "Conteudo de teste",
                 "reserva-emergencia.md",
-                "RESERVA_EMERGENCIA");
+                "RESERVA_EMERGENCIA",
+                "BEGINNER",
+                "pt-BR",
+                java.util.Map.of());
 
         when(retrievalService.search("reserva", "pt-BR", List.of("reserva-emergencia.md")))
                 .thenReturn(List.of(result));

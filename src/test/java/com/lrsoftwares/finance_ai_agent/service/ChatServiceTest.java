@@ -15,6 +15,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.lrsoftwares.finance_ai_agent.config.security.AuthenticatedUserProvider;
 import com.lrsoftwares.finance_ai_agent.entity.ChatMessage;
 import com.lrsoftwares.finance_ai_agent.entity.ChatRole;
 import com.lrsoftwares.finance_ai_agent.entity.ChatSession;
@@ -30,6 +31,9 @@ class ChatServiceTest {
     @Mock
     private ChatMessageRepository messageRepository;
 
+    @Mock
+    private AuthenticatedUserProvider authenticatedUserProvider;
+
     @InjectMocks
     private ChatService chatService;
 
@@ -41,9 +45,10 @@ class ChatServiceTest {
         persisted.setUserId(userId);
         persisted.setTitle("Nova conversa");
 
+        when(authenticatedUserProvider.getUserId()).thenReturn(userId);
         when(sessionRepository.save(any(ChatSession.class))).thenReturn(persisted);
 
-        ChatSession result = chatService.createSession(userId);
+        ChatSession result = chatService.createSession();
 
         assertThat(result.getId()).isEqualTo(persisted.getId());
         assertThat(result.getUserId()).isEqualTo(userId);
@@ -71,9 +76,10 @@ class ChatServiceTest {
         second.setUserId(userId);
         second.setTitle("Conversa B");
 
+        when(authenticatedUserProvider.getUserId()).thenReturn(userId);
         when(sessionRepository.findByUserId(userId)).thenReturn(List.of(first, second));
 
-        List<ChatSession> sessions = chatService.listSessions(userId);
+        List<ChatSession> sessions = chatService.listSessions();
 
         assertThat(sessions).hasSize(2);
         assertThat(sessions).extracting(ChatSession::getTitle).containsExactly("Conversa A", "Conversa B");

@@ -47,7 +47,7 @@ class FinancialAnalysisServiceImplTest {
                 Arrays.asList(category)
         );
 
-        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month)).thenReturn(summary);
+        when(summaryService.getSummaryMonthlyByUserIdAndDate(month)).thenReturn(summary);
 
         FinancialDiagnosisResponse diagnosis = analysisService.analyzeMonthly(userId, month);
 
@@ -75,7 +75,7 @@ class FinancialAnalysisServiceImplTest {
                 Arrays.asList(category)
         );
 
-        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month)).thenReturn(summary);
+        when(summaryService.getSummaryMonthlyByUserIdAndDate(month)).thenReturn(summary);
 
         FinancialDiagnosisResponse diagnosis = analysisService.analyzeMonthly(userId, month);
 
@@ -97,7 +97,7 @@ class FinancialAnalysisServiceImplTest {
                 Arrays.asList(category)
         );
 
-        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month)).thenReturn(summary);
+        when(summaryService.getSummaryMonthlyByUserIdAndDate(month)).thenReturn(summary);
 
         FinancialDiagnosisResponse diagnosis = analysisService.analyzeMonthly(userId, month);
 
@@ -120,7 +120,7 @@ class FinancialAnalysisServiceImplTest {
                 Arrays.asList(category)
         );
 
-        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month)).thenReturn(summary);
+        when(summaryService.getSummaryMonthlyByUserIdAndDate(month)).thenReturn(summary);
 
         FinancialDiagnosisResponse diagnosis = analysisService.analyzeMonthly(userId, month);
 
@@ -143,7 +143,7 @@ class FinancialAnalysisServiceImplTest {
                 Arrays.asList(category)
         );
 
-        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month)).thenReturn(summary);
+        when(summaryService.getSummaryMonthlyByUserIdAndDate(month)).thenReturn(summary);
 
         FinancialDiagnosisResponse diagnosis = analysisService.analyzeMonthly(userId, month);
 

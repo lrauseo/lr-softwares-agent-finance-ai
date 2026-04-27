@@ -65,7 +65,7 @@ class CategoriesControllerTest {
     void shouldListCategoriesByUserId() throws Exception {
         UUID userId = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
-        when(categoryService.listarPorUsuario(userId)).thenReturn(List.of(
+                when(categoryService.listarPorUsuario()).thenReturn(List.of(
                 new CategoryResponse(UUID.randomUUID(), userId, "Salario", TransactionType.INCOME, false),
                 new CategoryResponse(UUID.randomUUID(), userId, "Mercado", TransactionType.EXPENSE, false)));
 
@@ -74,7 +74,7 @@ class CategoriesControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2));
 
-        verify(categoryService).listarPorUsuario(userId);
+                verify(categoryService).listarPorUsuario();
     }
 
     @Test

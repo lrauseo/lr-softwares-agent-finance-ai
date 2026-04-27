@@ -12,6 +12,7 @@ import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.ai.document.Document;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +29,6 @@ import com.lrsoftwares.finance_ai_agent.dto.chat.ChatQuestionRequest;
 import com.lrsoftwares.finance_ai_agent.entity.AlertSeverity;
 import com.lrsoftwares.finance_ai_agent.entity.ChatMessage;
 import com.lrsoftwares.finance_ai_agent.entity.ChatRole;
-import com.lrsoftwares.finance_ai_agent.entity.rag.KnowledgeChunk;
 import com.lrsoftwares.finance_ai_agent.service.ChatService;
 import com.lrsoftwares.finance_ai_agent.service.ai.LLMClient;
 import com.lrsoftwares.finance_ai_agent.service.analysis.FinancialAnalysisService;
@@ -182,12 +182,13 @@ class FinancialAdvisorChatServiceImplTest {
         return message;
     }
 
-    private KnowledgeChunk buildChunk() {
-        KnowledgeChunk chunk = new KnowledgeChunk();
-        chunk.setSource("reserva-emergencia.md");
-        chunk.setTheme("RESERVA_EMERGENCIA");
-        chunk.setContent("Reserva de emergencia cobre imprevistos.");
-        chunk.setLanguage("pt-BR");
-        return chunk;
+    private Document buildChunk() {
+        return new Document(
+                "Reserva de emergencia cobre imprevistos.",
+                java.util.Map.of(
+                        "source", "reserva-emergencia.md",
+                        "theme", "RESERVA_EMERGENCIA",
+                        "audience", "BEGINNER",
+                        "language", "pt-BR"));
     }
 }

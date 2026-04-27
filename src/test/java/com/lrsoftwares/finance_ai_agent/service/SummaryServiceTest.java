@@ -18,6 +18,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.lrsoftwares.finance_ai_agent.config.security.AuthenticatedUserProvider;
 import com.lrsoftwares.finance_ai_agent.dto.TransactionResponse;
 import com.lrsoftwares.finance_ai_agent.entity.TransactionType;
 
@@ -26,6 +27,9 @@ class SummaryServiceTest {
 
     @Mock
     private TransactionService transactionService;
+
+        @Mock
+        private AuthenticatedUserProvider authenticatedUserProvider;
 
     @InjectMocks
     private SummaryService summaryService;
@@ -49,10 +53,11 @@ class SummaryServiceTest {
                 new TransactionResponse(UUID.randomUUID(), userId, leisureCategoryId, "Lazer", LocalDate.of(2026, 4, 12),
                         new BigDecimal("300.00"), TransactionType.EXPENSE, "Cinema", false));
 
+        when(authenticatedUserProvider.getUserId()).thenReturn(userId);
         when(transactionService.getByUserAndDate(userId, LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 30)))
                 .thenReturn(transactions);
 
-        var result = summaryService.getMonthlySummary(userId, monthDate);
+        var result = summaryService.getMonthlySummary(monthDate);
 
         assertThat(result.totalIncome()).isEqualByComparingTo("3500.00");
         assertThat(result.totalExpense()).isEqualByComparingTo("1500.00");
@@ -70,10 +75,11 @@ class SummaryServiceTest {
         UUID userId = UUID.randomUUID();
         YearMonth month = YearMonth.of(2026, 2);
 
+        when(authenticatedUserProvider.getUserId()).thenReturn(userId);
         when(transactionService.getByUserAndDate(userId, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28)))
                 .thenReturn(List.of());
 
-        var result = summaryService.getSummaryMonthlyByUserIdAndDate(userId, month);
+        var result = summaryService.getSummaryMonthlyByUserIdAndDate(month);
 
         verify(transactionService).getByUserAndDate(userId, LocalDate.of(2026, 2, 1), LocalDate.of(2026, 2, 28));
         assertThat(result.totalIncome()).isEqualByComparingTo("0");

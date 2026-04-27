@@ -39,7 +39,7 @@ class SummaryControllerTest {
                 new BigDecimal("4200.00"),
                 List.of(new CategoryTotalResponse("Alimentacao", new BigDecimal("800.00"))));
 
-        when(summaryService.getSummaryMonthlyByUserIdAndDate(userId, month)).thenReturn(response);
+        when(summaryService.getSummaryMonthlyByUserIdAndDate(month)).thenReturn(response);
 
         mockMvc.perform(get("/api/summary/monthly")
                         .param("userId", userId.toString())
