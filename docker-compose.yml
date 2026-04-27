@@ -11,21 +11,33 @@ services:
       POSTGRES_PASSWORD: finance_pass
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finance -d finance_ai_agent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  # app:
-  #   build: .
-  #   container_name: finance_ai_agent-app
-  #   depends_on:
-  #     - postgres
-  #   environment:
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/finance_ai_agent
-  #     SPRING_DATASOURCE_USERNAME: finance_user
-  #     SPRING_DATASOURCE_PASSWORD: finance_pass
-  #     OPENAI_API_KEY: ${OPENAI_API_KEY}
-  #   ports:
-  #     - "8080:8080"
+  app:
+    build: .
+    container_name: finance_ai_agent-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      POSTGRES_USER: finance_user
+      POSTGRES_PASSWORD: finance_pass
+      AI_API_KEY: ${OPENAI_API_KEY}      
+      AI_BASE_URL: "https://models.inference.ai.azure.com"
+      AI_CHAT_COMPLETIONS_PATH: "/chat/completions"
+      AI_EMBEDDINGS_PATH: "/embeddings"
+      AI_MODEL: "gpt-4o-mini"
+      AI_EMBEDDING_MODEL: "text-embedding-3-small"
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "8080:8080"
 
 volumes:
   postgres_data:

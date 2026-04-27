@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: finance_ai_agent
+  datasource:
+    url: jdbc:postgresql://postgres:5432/finance_ai_agent
+    username: ${POSTGRES_USER:finance}
+    password: ${POSTGRES_PASSWORD:finance}
+server:
+  port: 8080
+
+app:
+  knowledge:
+    docs-path: docs/rag
+    seed:
+      enabled: true
+      overwrite: true
+      language: pt-BR
+      audience: BEGINNER
+jwt:
+  secret: ${JWT_SECRET:secret-key-super-segura}
