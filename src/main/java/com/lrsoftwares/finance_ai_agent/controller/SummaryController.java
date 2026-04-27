@@ -30,15 +30,8 @@ public class SummaryController {
 	@GetMapping("/monthly")
 	@Operation(summary = "Resumo mensal", description = "Retorna o resumo mensal com receitas, despesas e categorias")
 	public ResponseEntity<?> getSummaryMonthlyByUserIdAndDate(@RequestParam @NonNull UUID userId,
-			@Parameter(
-                description = "Mes de referencia no padrao yyyy-MM. Exemplo: 2026-04",
-                schema = @Schema(
-                    type = "string",
-                    pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$",
-                    example = "2026-04"
-                )
-            ) @RequestParam @DateTimeFormat(pattern = "yyyy-MM") @NonNull YearMonth monthDate) {
-		MonthlySummaryResponse response = summaryService.getSummaryMonthlyByUserIdAndDate(userId, monthDate);
+			@Parameter(description = "Mes de referencia no padrao yyyy-MM. Exemplo: 2026-04", schema = @Schema(type = "string", pattern = "^[0-9]{4}-(0[1-9]|1[0-2])$", example = "2026-04")) @RequestParam @DateTimeFormat(pattern = "yyyy-MM") @NonNull YearMonth monthDate) {
+		MonthlySummaryResponse response = summaryService.getSummaryMonthlyByUserIdAndDate(monthDate);
 		return ResponseEntity.ok(response);
 	}
 

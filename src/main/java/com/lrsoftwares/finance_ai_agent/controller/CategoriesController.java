@@ -38,7 +38,7 @@ public class CategoriesController {
 
     @GetMapping
     public List<CategoryResponse> listarPorUsuario(@RequestParam UUID userId) {
-        return categoryService.listarPorUsuario(userId);
+        return categoryService.listarPorUsuario();
     }
 
     @PutMapping("/{id}")

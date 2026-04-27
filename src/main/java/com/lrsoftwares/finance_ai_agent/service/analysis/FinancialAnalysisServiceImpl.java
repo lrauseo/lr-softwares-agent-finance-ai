@@ -33,7 +33,7 @@ public class FinancialAnalysisServiceImpl implements FinancialAnalysisService {
 
 	@Override
 	public FinancialDiagnosisResponse analyzeMonthly(UUID userId, YearMonth month) {
-		MonthlySummaryResponse summary = summaryService.getSummaryMonthlyByUserIdAndDate(Objects.requireNonNull(userId),
+		MonthlySummaryResponse summary = summaryService.getSummaryMonthlyByUserIdAndDate(
 				Objects.requireNonNull(month));
 
 		List<FinancialAlertResponse> alerts = new ArrayList<>();

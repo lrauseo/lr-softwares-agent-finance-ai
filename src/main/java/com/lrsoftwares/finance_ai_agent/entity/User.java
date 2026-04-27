@@ -1,4 +1,3 @@
-package com.lrsoftwares.finance_ai_agent.entity;
 
 package com.lrsoftwares.finance_ai_agent.entity;
 
@@ -21,37 +20,37 @@ import lombok.Setter;
 @Table(name = "users")
 public class User {
 
-    @Id
-    @GeneratedValue
-    private UUID id;
+	@Id
+	@GeneratedValue
+	private UUID id;
 
-    @Column(nullable = false, length = 120)
-    private String name;
+	@Column(nullable = false, length = 120)
+	private String name;
 
-    @Column(nullable = false, unique = true, length = 160)
-    private String email;
+	@Column(nullable = false, unique = true, length = 160)
+	private String email;
 
-    @Column(nullable = false)
-    private String password;
+	@Column(nullable = false)
+	private String password;
 
-    @Column(nullable = false)
-    private Boolean active = Boolean.TRUE;
+	@Column(nullable = false)
+	private Boolean active = Boolean.TRUE;
 
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+	@Column(name = "created_at", nullable = false)
+	private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+	@Column(name = "updated_at", nullable = false)
+	private LocalDateTime updatedAt;
 
-    @PrePersist
-    void prePersist() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-        active = active == null ? Boolean.TRUE : active;
-    }
+	@PrePersist
+	void prePersist() {
+		createdAt = LocalDateTime.now();
+		updatedAt = LocalDateTime.now();
+		active = active == null ? Boolean.TRUE : active;
+	}
 
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = LocalDateTime.now();
-    }
+	@PreUpdate
+	void preUpdate() {
+		updatedAt = LocalDateTime.now();
+	}
 }

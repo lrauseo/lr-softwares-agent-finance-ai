@@ -32,12 +32,12 @@ public class ChatController {
 
 	@PostMapping("/sessions")
 	public ChatSession createSession(@RequestParam UUID userId) {
-		return chatService.createSession(userId);
+		return chatService.createSession();
 	}
 
 	@GetMapping("/sessions")
 	public List<ChatSession> listSessions(@RequestParam UUID userId) {
-		return chatService.listSessions(userId);
+		return chatService.listSessions();
 	}
 
 	@GetMapping("/sessions/{id}/messages")
