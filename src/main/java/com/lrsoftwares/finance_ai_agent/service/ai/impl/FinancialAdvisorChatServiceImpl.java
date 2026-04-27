@@ -146,6 +146,15 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 				- Seja direto e prático
 				- Não dê recomendações de investimento
 				- Foque em economia, controle e organização
+				- Responda em pt-BR.
+				- Priorize instruções práticas, ordem de decisão, riscos e trade-offs.
+				- Se houver conflito entre eficiência matemática e aderência comportamental, explicite o conflito.
+				- Quando o tema for dívida, sempre diferencie:
+				- reduzir juros
+				- reduzir parcela
+				- reduzir prazo
+				- reduzir risco jurídico
+				- Quando o tema for alavancagem, sempre inclua cenário de perda.
 
 				DADOS DO USUÁRIO:
 				%s

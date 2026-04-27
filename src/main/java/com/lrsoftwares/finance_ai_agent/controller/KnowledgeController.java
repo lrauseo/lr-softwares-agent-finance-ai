@@ -2,7 +2,6 @@ package com.lrsoftwares.finance_ai_agent.controller;
 
 import java.util.List;
 
-import org.springframework.ai.document.Document;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;

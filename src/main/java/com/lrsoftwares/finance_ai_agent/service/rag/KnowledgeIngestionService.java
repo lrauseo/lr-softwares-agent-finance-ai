@@ -15,6 +15,8 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +38,7 @@ public class KnowledgeIngestionService {
 	private static final String DEFAULT_AUDIENCE = "BEGINNER";
 
 	private final KnowledgeChunkRepository repository;
+	private final MarkdownRagDocumentParser documentParser;
 	private final VectorStore vectorStore;
 
 	@Value("${app.knowledge.docs-path:docs/rag}")
@@ -128,6 +131,8 @@ public class KnowledgeIngestionService {
 			if (!Files.exists(filePath)) {
 				throw new ResourceNotFoundException("Documento nao encontrado: " + normalizedSource);
 			}
+			Resource resource = new FileSystemResource(Objects.requireNonNull(filePath.toFile()));
+			var documents = documentParser.parse(resource);
 
 			if (overwriteExisting) {
 				deleteExistingBySource(normalizedSource);
@@ -138,21 +143,30 @@ public class KnowledgeIngestionService {
 			String resolvedAudience = resolveAudience(audience);
 			String resolvedLanguage = resolveLanguage(language);
 
-			List<Document> documents = buildDocuments(
-					Objects.requireNonNull(content),
-					normalizedSource,
-					resolvedTheme,
-					resolvedAudience,
-					resolvedLanguage);
+			// List<Document> documents = buildDocuments(
+			// Objects.requireNonNull(content),
+			// normalizedSource,
+			// resolvedTheme,
+			// resolvedAudience,
+			// resolvedLanguage);
 
 			vectorStore.add(Objects.requireNonNull(documents));
-			KnowledgeChunk chunk = new KnowledgeChunk();
-			chunk.setSource(normalizedSource);
-			chunk.setTheme(resolvedTheme);
-			chunk.setAudience(resolvedAudience);
-			chunk.setLanguage(resolvedLanguage);
-			chunk.setContent(content);
-			chunks.add(repository.save(chunk));
+			documents.forEach(doc -> {
+
+				KnowledgeChunk chunk = new KnowledgeChunk();
+				chunk.setSource(doc.getMetadata().get("source") != null ? doc.getMetadata().get("source").toString()
+						: normalizedSource);
+				chunk.setTheme(doc.getMetadata().get("theme") != null ? doc.getMetadata().get("theme").toString()
+						: resolvedTheme);
+				chunk.setAudience(
+						doc.getMetadata().get("audience") != null ? doc.getMetadata().get("audience").toString()
+								: resolvedAudience);
+				chunk.setLanguage(
+						doc.getMetadata().get("language") != null ? doc.getMetadata().get("language").toString()
+								: resolvedLanguage);
+				chunk.setContent(content);
+				chunks.add(repository.save(chunk));
+			});
 		}
 		return chunks;
 	}
@@ -247,7 +261,6 @@ public class KnowledgeIngestionService {
 		if (Objects.nonNull(language)) {
 			metadados.put("language", language);
 		}
-
 		Document document = new Document(content, metadados);
 		TokenTextSplitter splitter = new TokenTextSplitter();
 		return splitter.apply(List.of(document));

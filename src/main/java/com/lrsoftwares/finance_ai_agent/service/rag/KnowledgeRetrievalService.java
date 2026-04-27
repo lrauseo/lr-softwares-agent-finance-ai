@@ -26,12 +26,14 @@ public class KnowledgeRetrievalService {
 						.query(question)
 						.topK(5)
 						.similarityThreshold(0.70)
-						.filterExpression("language == 'pt-BR'").build());
+						.filterExpression(
+								"language == 'pt-BR' && (theme == 'educacao_financeira' || tags CONTAINS 'educacao_financeira')")
+						.build());
 	}
 
 	public List<KnowledgeSearchResponse> search(String query, String language, List<String> sources) {
 		String normalizedLanguage = Objects.requireNonNullElse(language, "pt-BR");
-		String filter = "language == '" + normalizedLanguage + "'";
+		String filter = "language == '" + normalizedLanguage + "' && (theme == 'educacao_financeira' || tags CONTAINS 'educacao_financeira')";
 		if (sources != null && !sources.isEmpty()) {
 			String sourceFilter = sources.stream()
 					.map(source -> "source == '" + source + "'")
