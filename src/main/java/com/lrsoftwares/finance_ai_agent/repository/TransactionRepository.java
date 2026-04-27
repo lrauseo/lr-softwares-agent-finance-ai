@@ -59,4 +59,15 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
               and t.date between :start and :end
             """)
     BigDecimal sumExpenseByCategoryAndPeriod(UUID userId, UUID categoryId, LocalDate start, LocalDate end);
+
+    @Query("""
+            select lower(trim(t.description)), t.category.id, count(t)
+            from Transaction t
+            where t.userId = :userId
+              and t.type = 'EXPENSE'
+              and t.description is not null
+              and trim(t.description) <> ''
+            group by lower(trim(t.description)), t.category.id
+            """)
+    List<Object[]> expenseDescriptionFrequencyByUser(UUID userId);
 }

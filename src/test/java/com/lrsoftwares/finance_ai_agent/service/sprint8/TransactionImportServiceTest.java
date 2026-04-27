@@ -1,0 +1,92 @@
+package com.lrsoftwares.finance_ai_agent.service.sprint8;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
+
+import com.lrsoftwares.finance_ai_agent.config.security.AuthenticatedUserProvider;
+import com.lrsoftwares.finance_ai_agent.dto.CreateTransactionRequest;
+import com.lrsoftwares.finance_ai_agent.entity.Category;
+import com.lrsoftwares.finance_ai_agent.entity.TransactionType;
+import com.lrsoftwares.finance_ai_agent.repository.CategoryRepository;
+import com.lrsoftwares.finance_ai_agent.service.TransactionService;
+
+@ExtendWith(MockitoExtension.class)
+class TransactionImportServiceTest {
+
+    @Mock
+    private AuthenticatedUserProvider authenticatedUserProvider;
+
+    @Mock
+    private CategoryRepository categoryRepository;
+
+    @Mock
+    private TransactionService transactionService;
+
+    @Mock
+    private ExpenseAutoClassificationService expenseAutoClassificationService;
+
+    @InjectMocks
+    private TransactionImportService service;
+
+    @Test
+    void shouldParseQuotedCsvWithDelimiterInsideDescription() {
+        UUID userId = UUID.randomUUID();
+        UUID categoryId = UUID.randomUUID();
+
+        Category category = Category.builder()
+                .id(categoryId)
+                .userId(userId)
+                .name("Alimentacao")
+                .type(TransactionType.EXPENSE)
+                .systemDefault(false)
+                .build();
+
+        String csv = "date;description;amount;type;category;recurring\n"
+                + "2026-04-12;\"Mercado, atacado\";120.50;EXPENSE;Alimentacao;false\n";
+
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+
+        when(authenticatedUserProvider.getUserId()).thenReturn(userId);
+        when(categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, "Alimentacao", TransactionType.EXPENSE))
+                .thenReturn(Optional.of(category));
+
+        var response = service.importCsv(file);
+
+        assertThat(response.importedCount()).isEqualTo(1);
+        assertThat(response.skippedCount()).isEqualTo(0);
+
+        ArgumentCaptor<CreateTransactionRequest> captor = ArgumentCaptor.forClass(CreateTransactionRequest.class);
+        org.mockito.Mockito.verify(transactionService).salvar(captor.capture());
+
+        CreateTransactionRequest captured = captor.getValue();
+        assertThat(captured.description()).isEqualTo("Mercado, atacado");
+        assertThat(captured.categoryId()).isEqualTo(categoryId);
+        assertThat(captured.type()).isEqualTo(TransactionType.EXPENSE);
+    }
+
+    @Test
+    void shouldSkipBrokenCsvRecordAndCollectWarning() {
+        String csv = "date;description;amount\n2026-04-10;Compra;abc\n";
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+
+        var response = service.importCsv(file);
+
+        assertThat(response.importedCount()).isEqualTo(0);
+        assertThat(response.skippedCount()).isEqualTo(1);
+        assertThat(response.warnings()).isNotEmpty();
+        org.mockito.Mockito.verify(transactionService, org.mockito.Mockito.never()).salvar(any());
+    }
+}

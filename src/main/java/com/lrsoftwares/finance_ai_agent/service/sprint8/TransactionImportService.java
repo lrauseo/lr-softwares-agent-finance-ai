@@ -1,6 +1,7 @@
 package com.lrsoftwares.finance_ai_agent.service.sprint8;
 
 import java.io.IOException;
+import java.io.StringReader;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -13,6 +14,10 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVParser;
+import org.apache.commons.csv.CSVRecord;
 
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -45,33 +50,111 @@ public class TransactionImportService {
 
         try {
             String content = new String(file.getBytes(), StandardCharsets.UTF_8);
-            String[] lines = content.split("\\R");
-            if (lines.length <= 1) {
+            String[] lines = content.split("\\R", 2);
+            if (lines.length == 0 || lines[0].isBlank()) {
                 return new ImportTransactionsResponse(0, 0, List.of("Arquivo CSV sem linhas de dados."));
             }
 
-            String delimiter = lines[0].contains(";") ? ";" : ",";
+            char delimiter = detectDelimiter(lines[0]);
+            CSVFormat format = CSVFormat.DEFAULT.builder()
+                    .setDelimiter(delimiter)
+                    .setQuote('"')
+                    .setEscape('\\')
+                    .setIgnoreEmptyLines(true)
+                    .setTrim(false)
+                    .build();
 
-            for (int i = 1; i < lines.length; i++) {
-                String line = lines[i].trim();
-                if (line.isBlank()) {
-                    continue;
-                }
+            try (CSVParser parser = CSVParser.parse(new StringReader(content), format)) {
+                for (CSVRecord record : parser) {
+                    if (isBlankRecord(record)) {
+                        continue;
+                    }
+                    if (record.getRecordNumber() == 1 && looksLikeHeader(record)) {
+                        continue;
+                    }
 
-                try {
-                    ImportedRow row = parseCsvLine(line, delimiter);
-                    saveImportedRow(row);
-                    imported++;
-                } catch (Exception ex) {
-                    skipped++;
-                    warnings.add("Linha " + (i + 1) + " ignorada: " + ex.getMessage());
+                    try {
+                        ImportedRow row = parseCsvRecord(record);
+                        saveImportedRow(row);
+                        imported++;
+                    } catch (Exception ex) {
+                        skipped++;
+                        warnings.add("Registro " + record.getRecordNumber() + " ignorado: " + ex.getMessage());
+                    }
                 }
+            }
+
+            if (imported == 0 && skipped == 0) {
+                return new ImportTransactionsResponse(0, 0, List.of("Arquivo CSV sem linhas de dados."));
             }
 
             return new ImportTransactionsResponse(imported, skipped, warnings);
         } catch (IOException ex) {
             return new ImportTransactionsResponse(0, 1, List.of("Falha ao ler arquivo CSV: " + ex.getMessage()));
         }
+    }
+
+    private ImportedRow parseCsvRecord(CSVRecord record) {
+        if (record.size() < 3) {
+            throw new IllegalArgumentException("colunas insuficientes. Esperado: date,description,amount,...");
+        }
+
+        String dateValue = valueAt(record, 0);
+        String description = valueAt(record, 1);
+        String amountValue = valueAt(record, 2);
+
+        LocalDate date = parseDate(dateValue);
+        BigDecimal rawAmount = parseAmount(amountValue);
+
+        String typeValue = valueAt(record, 3);
+        TransactionType type = (typeValue != null && !typeValue.isBlank())
+                ? parseType(typeValue, rawAmount)
+                : (rawAmount.signum() < 0 ? TransactionType.EXPENSE : TransactionType.INCOME);
+
+        String categoryName = valueAt(record, 4);
+        String recurringValue = valueAt(record, 5);
+        boolean recurring = recurringValue != null && Boolean.parseBoolean(recurringValue.trim());
+
+        return new ImportedRow(date, description, rawAmount.abs(), type, categoryName, recurring);
+    }
+
+    private char detectDelimiter(String headerLine) {
+        return headerLine.contains(";") ? ';' : ',';
+    }
+
+    private boolean isBlankRecord(CSVRecord record) {
+        for (int i = 0; i < record.size(); i++) {
+            if (!record.get(i).trim().isBlank()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean looksLikeHeader(CSVRecord record) {
+        String first = valueAt(record, 0);
+        String second = valueAt(record, 1);
+        String third = valueAt(record, 2);
+
+        if (first == null || second == null || third == null) {
+            return false;
+        }
+
+        String f = first.trim().toLowerCase(Locale.ROOT);
+        String s = second.trim().toLowerCase(Locale.ROOT);
+        String t = third.trim().toLowerCase(Locale.ROOT);
+
+        return (f.equals("date") || f.equals("data"))
+                && (s.equals("description") || s.equals("descricao"))
+                && (t.equals("amount") || t.equals("valor"));
+    }
+
+    private String valueAt(CSVRecord record, int index) {
+        if (index >= record.size()) {
+            return null;
+        }
+        String value = record.get(index);
+        return value == null ? null : value.trim();
     }
 
     public ImportTransactionsResponse importOfx(MultipartFile file) {
@@ -99,26 +182,6 @@ public class TransactionImportService {
         } catch (IOException ex) {
             return new ImportTransactionsResponse(0, 1, List.of("Falha ao ler arquivo OFX: " + ex.getMessage()));
         }
-    }
-
-    private ImportedRow parseCsvLine(String line, String delimiter) {
-        String[] cols = line.split(Pattern.quote(delimiter), -1);
-        if (cols.length < 3) {
-            throw new IllegalArgumentException("colunas insuficientes. Esperado: date,description,amount,...");
-        }
-
-        LocalDate date = parseDate(cols[0].trim());
-        String description = cols[1].trim();
-        BigDecimal rawAmount = parseAmount(cols[2].trim());
-
-        TransactionType type = cols.length > 3 && !cols[3].isBlank()
-                ? parseType(cols[3].trim(), rawAmount)
-                : (rawAmount.signum() < 0 ? TransactionType.EXPENSE : TransactionType.INCOME);
-
-        String categoryName = cols.length > 4 ? cols[4].trim() : null;
-        boolean recurring = cols.length > 5 && Boolean.parseBoolean(cols[5].trim());
-
-        return new ImportedRow(date, description, rawAmount.abs(), type, categoryName, recurring);
     }
 
     private ImportedRow parseOfxBlock(String block) {
