@@ -20,4 +20,6 @@ public interface CategoryRepository extends JpaRepository<Category, UUID> {
             TransactionType type,
             UUID id
     );
+
+    java.util.Optional<Category> findByUserIdAndNameIgnoreCaseAndType(UUID userId, String name, TransactionType type);
 }
