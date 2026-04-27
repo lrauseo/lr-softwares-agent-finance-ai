@@ -62,3 +62,5 @@ app:
       overwrite: true
       language: pt-BR
       audience: BEGINNER
+jwt:
+  secret: ${JWT_SECRET:secret-key-super-segura}

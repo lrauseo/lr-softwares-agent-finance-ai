@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
+import com.lrsoftwares.finance_ai_agent.config.security.AuthenticatedUserProvider;
 import com.lrsoftwares.finance_ai_agent.dto.CategoryResponse;
 import com.lrsoftwares.finance_ai_agent.dto.CreateCategoryRequest;
 import com.lrsoftwares.finance_ai_agent.dto.UpdateCategoryRequest;
@@ -25,24 +26,28 @@ public class CategoryService {
 	private final CategoryRepository categoryRepository;
 	private final TransactionRepository transactionRepository;
 	private final CategoryMapper categoryMapper;
+	private final AuthenticatedUserProvider authenticatedUserProvider;
 
 	public CategoryResponse salvar(CreateCategoryRequest request) {
 		boolean exists = categoryRepository.existsByUserIdAndNameIgnoreCaseAndType(
-				request.userId(),
+				authenticatedUserProvider.getUserId(),
 				request.name(),
 				request.type());
 
 		if (exists) {
 			throw new BusinessException("Já existe uma categoria com esse nome e tipo para este usuário.");
 		}
-
+		if (request.userId() != null && !request.userId().equals(authenticatedUserProvider.getUserId())) {
+			throw new BusinessException("Não é permitido criar categoria para outro usuário.");
+		}
 		Category category = categoryMapper.toEntity(request);
 		category.setSystemDefault(Boolean.FALSE);
 
 		return categoryMapper.toDto(categoryRepository.save(category));
 	}
 
-	public List<CategoryResponse> listarPorUsuario(UUID userId) {
+	public List<CategoryResponse> listarPorUsuario() {
+		UUID userId = authenticatedUserProvider.getUserId();
 		return categoryRepository.findByUserId(userId)
 				.stream()
 				.map(categoryMapper::toDto)
@@ -54,7 +59,7 @@ public class CategoryService {
 				.orElseThrow(() -> new ResourceNotFoundException("Categoria não encontrada."));
 
 		boolean exists = categoryRepository.existsByUserIdAndNameIgnoreCaseAndTypeAndIdNot(
-				category.getUserId(),
+				authenticatedUserProvider.getUserId(),
 				request.name(),
 				request.type(),
 				id);
@@ -79,6 +84,9 @@ public class CategoryService {
 
 		if (transactionRepository.existsByCategoryId(id)) {
 			throw new BusinessException("Categoria em uso não pode ser removida.");
+		}
+		if (!category.getUserId().equals(authenticatedUserProvider.getUserId())) {
+			throw new BusinessException("Não é permitido remover categoria de outro usuário.");
 		}
 
 		categoryRepository.delete(category);

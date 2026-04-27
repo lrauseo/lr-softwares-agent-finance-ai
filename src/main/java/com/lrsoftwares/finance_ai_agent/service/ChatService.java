@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Service;
 
+import com.lrsoftwares.finance_ai_agent.config.security.AuthenticatedUserProvider;
 import com.lrsoftwares.finance_ai_agent.entity.ChatMessage;
 import com.lrsoftwares.finance_ai_agent.entity.ChatRole;
 import com.lrsoftwares.finance_ai_agent.entity.ChatSession;
@@ -20,8 +21,10 @@ public class ChatService {
 
     private final ChatSessionRepository sessionRepository;
     private final ChatMessageRepository messageRepository;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
 
-    public ChatSession createSession(UUID userId) {
+    public ChatSession createSession() {
+        UUID userId = authenticatedUserProvider.getUserId();
         ChatSession session = new ChatSession();
         session.setUserId(userId);
         session.setTitle("Nova conversa");
@@ -31,7 +34,8 @@ public class ChatService {
         return sessionRepository.save(session);
     }
 
-    public List<ChatSession> listSessions(UUID userId) {
+    public List<ChatSession> listSessions() {
+        UUID userId = authenticatedUserProvider.getUserId();
         return sessionRepository.findByUserId(userId);
     }
 

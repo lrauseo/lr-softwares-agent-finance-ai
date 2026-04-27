@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
+import com.lrsoftwares.finance_ai_agent.config.security.AuthenticatedUserProvider;
 import com.lrsoftwares.finance_ai_agent.dto.CategoryTotalResponse;
 import com.lrsoftwares.finance_ai_agent.dto.MonthlySummaryResponse;
 import com.lrsoftwares.finance_ai_agent.dto.TransactionResponse;
@@ -21,13 +22,15 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SummaryService {
 	private final TransactionService transactionService;
+	private final AuthenticatedUserProvider authenticatedUserProvider;
 
-	public MonthlySummaryResponse getSummaryMonthlyByUserIdAndDate(@NonNull UUID userId, @NonNull YearMonth monthDate) {
+	public MonthlySummaryResponse getSummaryMonthlyByUserIdAndDate(@NonNull YearMonth monthDate) {
 		LocalDate firstDayOfMonth = monthDate.atDay(1);
-		return getMonthlySummary(userId, firstDayOfMonth);
+		return getMonthlySummary(firstDayOfMonth);
 	}
 
-	public MonthlySummaryResponse getMonthlySummary(@NonNull UUID userId, @NonNull LocalDate monthDate) {
+	public MonthlySummaryResponse getMonthlySummary(@NonNull LocalDate monthDate) {
+		UUID userId = authenticatedUserProvider.getUserId();
 		LocalDate startDate = Objects.requireNonNull(monthDate.withDayOfMonth(1));
 		LocalDate endDate = Objects.requireNonNull(monthDate.withDayOfMonth(monthDate.lengthOfMonth()));
 		var transactions = transactionService.getByUserAndDate(userId, startDate, endDate);
