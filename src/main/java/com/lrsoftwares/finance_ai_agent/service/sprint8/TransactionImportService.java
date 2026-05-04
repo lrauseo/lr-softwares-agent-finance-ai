@@ -177,13 +177,13 @@ public class TransactionImportService {
         LocalDate date = parseDate(dateValue);
         BigDecimal rawAmount = parseAmount(amountValue);
 
-        String typeValue = cols.type() >= 0 ? valueAt(record, cols.type()) : null;
+        String typeValue = valueAt(record, cols.type());
         TransactionType type = (typeValue != null && !typeValue.isBlank())
                 ? parseType(typeValue, rawAmount)
                 : (rawAmount.signum() < 0 ? TransactionType.EXPENSE : TransactionType.INCOME);
 
-        String categoryName = cols.category() >= 0 ? valueAt(record, cols.category()) : null;
-        String recurringValue = cols.recurring() >= 0 ? valueAt(record, cols.recurring()) : null;
+        String categoryName = valueAt(record, cols.category());
+        String recurringValue = valueAt(record, cols.recurring());
         boolean recurring = recurringValue != null && Boolean.parseBoolean(recurringValue.trim());
 
         return new ImportedRow(date, description, rawAmount.abs(), type, categoryName, recurring);
