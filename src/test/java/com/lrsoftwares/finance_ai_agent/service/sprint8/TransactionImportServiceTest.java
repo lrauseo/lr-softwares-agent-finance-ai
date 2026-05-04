@@ -193,5 +193,37 @@ class TransactionImportServiceTest {
         assertThat(response.importedCount()).isEqualTo(1);
         assertThat(response.skippedCount()).isEqualTo(0);
     }
+
+    @Test
+    void shouldReturnErrorResponseWhenMappingReferencesNonexistentHeader() {
+        String csv = "date;description;amount\n2026-05-01;Salario;1000.00\n";
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+
+        CsvColumnMapping mapping = new CsvColumnMapping("nonexistent", "description", "amount", null, null, null);
+
+        var response = service.importCsv(file, mapping);
+
+        assertThat(response.importedCount()).isEqualTo(0);
+        assertThat(response.skippedCount()).isEqualTo(0);
+        assertThat(response.warnings()).hasSize(1);
+        assertThat(response.warnings().get(0)).contains("Mapeamento de colunas invalido");
+        org.mockito.Mockito.verify(transactionService, org.mockito.Mockito.never()).salvar(any());
+    }
+
+    @Test
+    void shouldReturnErrorResponseWhenMappingHasNegativeIndex() {
+        String csv = "2026-05-01;Salario;1000.00\n";
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+
+        CsvColumnMapping mapping = new CsvColumnMapping("-1", "1", "2", null, null, null);
+
+        var response = service.importCsv(file, mapping);
+
+        assertThat(response.importedCount()).isEqualTo(0);
+        assertThat(response.skippedCount()).isEqualTo(0);
+        assertThat(response.warnings()).hasSize(1);
+        assertThat(response.warnings().get(0)).contains("Mapeamento de colunas invalido");
+        org.mockito.Mockito.verify(transactionService, org.mockito.Mockito.never()).salvar(any());
+    }
 }
 

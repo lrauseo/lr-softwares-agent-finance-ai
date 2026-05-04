@@ -80,13 +80,23 @@ public class TransactionImportService {
                     }
                     if (record.getRecordNumber() == 1
                             && (looksLikeHeader(record) || mappingRequiresHeader(columnMapping))) {
-                        Map<String, Integer> headerMap = buildHeaderMap(record);
-                        columnIndices = resolveColumnIndices(columnMapping, headerMap);
+                        try {
+                            Map<String, Integer> headerMap = buildHeaderMap(record);
+                            columnIndices = resolveColumnIndices(columnMapping, headerMap);
+                        } catch (IllegalArgumentException ex) {
+                            return new ImportTransactionsResponse(0, 0,
+                                    List.of("Mapeamento de colunas invalido: " + ex.getMessage()));
+                        }
                         continue;
                     }
 
                     if (columnIndices == null) {
-                        columnIndices = resolveColumnIndices(columnMapping, Map.of());
+                        try {
+                            columnIndices = resolveColumnIndices(columnMapping, Map.of());
+                        } catch (IllegalArgumentException ex) {
+                            return new ImportTransactionsResponse(0, 0,
+                                    List.of("Mapeamento de colunas invalido: " + ex.getMessage()));
+                        }
                     }
 
                     try {
