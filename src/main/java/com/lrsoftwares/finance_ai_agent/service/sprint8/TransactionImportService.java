@@ -8,8 +8,10 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -24,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.lrsoftwares.finance_ai_agent.config.security.AuthenticatedUserProvider;
 import com.lrsoftwares.finance_ai_agent.dto.CreateTransactionRequest;
+import com.lrsoftwares.finance_ai_agent.dto.sprint8.CsvColumnMapping;
 import com.lrsoftwares.finance_ai_agent.dto.sprint8.ImportTransactionsResponse;
 import com.lrsoftwares.finance_ai_agent.entity.Category;
 import com.lrsoftwares.finance_ai_agent.entity.TransactionType;
@@ -44,12 +47,20 @@ public class TransactionImportService {
     private final ExpenseAutoClassificationService expenseAutoClassificationService;
 
     public ImportTransactionsResponse importCsv(MultipartFile file) {
+        return importCsv(file, null);
+    }
+
+    public ImportTransactionsResponse importCsv(MultipartFile file, CsvColumnMapping columnMapping) {
         List<String> warnings = new ArrayList<>();
         int imported = 0;
         int skipped = 0;
 
         try {
             String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            // Strip UTF-8 BOM if present (common in Excel-exported CSVs)
+            if (content.startsWith("\uFEFF")) {
+                content = content.substring(1);
+            }
             String[] lines = content.split("\\R", 2);
             if (lines.length == 0 || lines[0].isBlank()) {
                 return new ImportTransactionsResponse(0, 0, List.of("Arquivo CSV sem linhas de dados."));
@@ -64,17 +75,45 @@ public class TransactionImportService {
                     .setTrim(false)
                     .build();
 
+            ColumnIndices columnIndices = null;
+
             try (CSVParser parser = CSVParser.parse(new StringReader(content), format)) {
                 for (CSVRecord record : parser) {
                     if (isBlankRecord(record)) {
                         continue;
                     }
-                    if (record.getRecordNumber() == 1 && looksLikeHeader(record)) {
+                    if (record.getRecordNumber() == 1
+                            && (looksLikeHeader(record) || mappingRequiresHeader(columnMapping))) {
+                        if (mappingRequiresHeader(columnMapping)) {
+                            Map<String, Integer> headerMap;
+                            try {
+                                headerMap = buildHeaderMap(record);
+                            } catch (IllegalArgumentException ex) {
+                                return new ImportTransactionsResponse(0, 0,
+                                        List.of("Cabeçalho CSV inválido: " + ex.getMessage()));
+                            }
+                            try {
+                                columnIndices = resolveColumnIndices(columnMapping, headerMap);
+                            } catch (IllegalArgumentException ex) {
+                                return new ImportTransactionsResponse(0, 0,
+                                        List.of("Mapeamento de colunas invalido: " + ex.getMessage()));
+                            }
+                        }
+                        // else: header row detected but only index-based mapping (or no mapping) — skip row silently
                         continue;
                     }
 
+                    if (columnIndices == null) {
+                        try {
+                            columnIndices = resolveColumnIndices(columnMapping, Map.of());
+                        } catch (IllegalArgumentException ex) {
+                            return new ImportTransactionsResponse(0, 0,
+                                    List.of("Mapeamento de colunas invalido: " + ex.getMessage()));
+                        }
+                    }
+
                     try {
-                        ImportedRow row = parseCsvRecord(record);
+                        ImportedRow row = parseCsvRecord(record, columnIndices);
                         saveImportedRow(row);
                         imported++;
                     } catch (Exception ex) {
@@ -94,25 +133,78 @@ public class TransactionImportService {
         }
     }
 
-    private ImportedRow parseCsvRecord(CSVRecord record) {
-        if (record.size() < 3) {
+    private Map<String, Integer> buildHeaderMap(CSVRecord headerRecord) {
+        Map<String, Integer> map = new LinkedHashMap<>();
+        for (int i = 0; i < headerRecord.size(); i++) {
+            String name = headerRecord.get(i).trim().toLowerCase(Locale.ROOT);
+            if (name.isEmpty()) {
+                throw new IllegalArgumentException("Cabecalho vazio encontrado na coluna " + i);
+            }
+            if (map.containsKey(name)) {
+                throw new IllegalArgumentException("Nome de coluna duplicado no cabecalho: '" + name + "'");
+            }
+            map.put(name, i);
+        }
+        return map;
+    }
+
+    private ColumnIndices resolveColumnIndices(CsvColumnMapping mapping, Map<String, Integer> headerMap) {
+        if (mapping == null) {
+            return new ColumnIndices(0, 1, 2, 3, 4, 5);
+        }
+        return new ColumnIndices(
+                resolveIndex(mapping.date(), headerMap, "date", 0),
+                resolveIndex(mapping.description(), headerMap, "description", 1),
+                resolveIndex(mapping.amount(), headerMap, "amount", 2),
+                resolveIndex(mapping.type(), headerMap, "type", 3),
+                resolveIndex(mapping.category(), headerMap, "category", 4),
+                resolveIndex(mapping.recurring(), headerMap, "recurring", 5));
+    }
+
+    private int resolveIndex(String spec, Map<String, Integer> headerMap, String fieldName, int defaultIndex) {
+        if (spec == null || spec.isBlank()) {
+            return defaultIndex;
+        }
+        try {
+            int index = Integer.parseInt(spec.trim());
+            if (index < 0) {
+                throw new IllegalArgumentException(
+                        "Indice de coluna invalido para o campo '" + fieldName + "': " + spec + ". O indice deve ser >= 0.");
+            }
+            return index;
+        } catch (NumberFormatException e) {
+            Integer idx = headerMap.get(spec.trim().toLowerCase(Locale.ROOT));
+            if (idx != null) {
+                return idx;
+            }
+            throw new IllegalArgumentException("Coluna nao encontrada para o campo '" + fieldName + "': " + spec);
+        }
+    }
+
+    private ImportedRow parseCsvRecord(CSVRecord record, ColumnIndices cols) {
+        int minRequired = Math.max(cols.date(), Math.max(cols.description(), cols.amount())) + 1;
+        if (record.size() < minRequired) {
             throw new IllegalArgumentException("colunas insuficientes. Esperado: date,description,amount,...");
         }
 
-        String dateValue = valueAt(record, 0);
-        String description = valueAt(record, 1);
-        String amountValue = valueAt(record, 2);
+        String dateValue = valueAt(record, cols.date());
+        String description = valueAt(record, cols.description());
+        String amountValue = valueAt(record, cols.amount());
+
+        if (dateValue == null || description == null || amountValue == null) {
+            throw new IllegalArgumentException("colunas obrigatorias ausentes (date, description, amount)");
+        }
 
         LocalDate date = parseDate(dateValue);
         BigDecimal rawAmount = parseAmount(amountValue);
 
-        String typeValue = valueAt(record, 3);
+        String typeValue = valueAt(record, cols.type());
         TransactionType type = (typeValue != null && !typeValue.isBlank())
                 ? parseType(typeValue, rawAmount)
                 : (rawAmount.signum() < 0 ? TransactionType.EXPENSE : TransactionType.INCOME);
 
-        String categoryName = valueAt(record, 4);
-        String recurringValue = valueAt(record, 5);
+        String categoryName = valueAt(record, cols.category());
+        String recurringValue = valueAt(record, cols.recurring());
         boolean recurring = recurringValue != null && Boolean.parseBoolean(recurringValue.trim());
 
         return new ImportedRow(date, description, rawAmount.abs(), type, categoryName, recurring);
@@ -120,6 +212,27 @@ public class TransactionImportService {
 
     private char detectDelimiter(String headerLine) {
         return headerLine.contains(";") ? ';' : ',';
+    }
+
+    private boolean mappingRequiresHeader(CsvColumnMapping mapping) {
+        if (mapping == null) {
+            return false;
+        }
+        return isHeaderName(mapping.date()) || isHeaderName(mapping.description())
+                || isHeaderName(mapping.amount()) || isHeaderName(mapping.type())
+                || isHeaderName(mapping.category()) || isHeaderName(mapping.recurring());
+    }
+
+    private boolean isHeaderName(String spec) {
+        if (spec == null || spec.isBlank()) {
+            return false;
+        }
+        try {
+            Integer.parseInt(spec.trim());
+            return false;
+        } catch (NumberFormatException e) {
+            return true;
+        }
     }
 
     private boolean isBlankRecord(CSVRecord record) {
@@ -298,6 +411,9 @@ public class TransactionImportService {
             }
         }
         return null;
+    }
+
+    private record ColumnIndices(int date, int description, int amount, int type, int category, int recurring) {
     }
 
     private record ImportedRow(
