@@ -2,6 +2,8 @@ package com.lrsoftwares.finance_ai_agent.service.sprint8;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -89,4 +91,47 @@ class TransactionImportServiceTest {
         assertThat(response.warnings()).isNotEmpty();
         org.mockito.Mockito.verify(transactionService, org.mockito.Mockito.never()).salvar(any());
     }
+
+        @Test
+        void shouldCreateCategoryWhenCsvCategoryDoesNotExist() {
+        UUID userId = UUID.randomUUID();
+        UUID createdCategoryId = UUID.randomUUID();
+
+        String csv = "date;description;amount;type;category;recurring\n"
+            + "2026-04-12;Supermercado;120.50;EXPENSE;Compras do mes;false\n";
+
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+
+        Category createdCategory = Category.builder()
+            .id(createdCategoryId)
+            .userId(userId)
+            .name("Compras do mes")
+            .type(TransactionType.EXPENSE)
+            .systemDefault(false)
+            .build();
+
+        when(authenticatedUserProvider.getUserId()).thenReturn(userId);
+        when(categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, "Compras do mes", TransactionType.EXPENSE))
+            .thenReturn(Optional.empty());
+        when(categoryRepository.save(any(Category.class))).thenReturn(createdCategory);
+
+        var response = service.importCsv(file);
+
+        assertThat(response.importedCount()).isEqualTo(1);
+        assertThat(response.skippedCount()).isEqualTo(0);
+
+        verify(categoryRepository).save(argThat(category ->
+            category.getUserId().equals(userId)
+                && category.getName().equals("Compras do mes")
+                && category.getType().equals(TransactionType.EXPENSE)
+                && Boolean.FALSE.equals(category.getSystemDefault())));
+
+        ArgumentCaptor<CreateTransactionRequest> captor = ArgumentCaptor.forClass(CreateTransactionRequest.class);
+        verify(transactionService).salvar(captor.capture());
+
+        CreateTransactionRequest captured = captor.getValue();
+        assertThat(captured.categoryId()).isEqualTo(createdCategoryId);
+        assertThat(captured.type()).isEqualTo(TransactionType.EXPENSE);
+        assertThat(captured.description()).isEqualTo("Supermercado");
+        }
 }

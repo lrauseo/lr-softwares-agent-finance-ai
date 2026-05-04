@@ -101,7 +101,7 @@ public class TransactionImportService {
 
         String dateValue = valueAt(record, 0);
         String description = valueAt(record, 1);
-        String amountValue = valueAt(record, 2);
+        String amountValue = valueAt(record, 3);
 
         LocalDate date = parseDate(dateValue);
         BigDecimal rawAmount = parseAmount(amountValue);
@@ -111,7 +111,7 @@ public class TransactionImportService {
                 ? parseType(typeValue, rawAmount)
                 : (rawAmount.signum() < 0 ? TransactionType.EXPENSE : TransactionType.INCOME);
 
-        String categoryName = valueAt(record, 4);
+        String categoryName = valueAt(record, 2);
         String recurringValue = valueAt(record, 5);
         boolean recurring = recurringValue != null && Boolean.parseBoolean(recurringValue.trim());
 
@@ -221,10 +221,18 @@ public class TransactionImportService {
 
     private Category resolveCategory(UUID userId, String categoryName, TransactionType type, String description) {
         if (categoryName != null && !categoryName.isBlank()) {
-            var found = categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, categoryName.trim(), type);
+            String normalizedCategoryName = categoryName.trim();
+            var found = categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, normalizedCategoryName, type);
             if (found.isPresent()) {
                 return found.get();
             }
+
+            return categoryRepository.save(Category.builder()
+                    .userId(userId)
+                    .name(normalizedCategoryName)
+                    .type(type)
+                    .systemDefault(Boolean.FALSE)
+                    .build());
         }
 
         if (type == TransactionType.EXPENSE) {

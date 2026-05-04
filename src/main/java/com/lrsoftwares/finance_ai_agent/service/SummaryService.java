@@ -31,7 +31,7 @@ public class SummaryService {
 
 	public MonthlySummaryResponse getMonthlySummary(@NonNull LocalDate monthDate) {
 		UUID userId = authenticatedUserProvider.getUserId();
-		LocalDate startDate = Objects.requireNonNull(monthDate.withDayOfMonth(1));
+		LocalDate startDate = Objects.requireNonNull(monthDate.minusMonths(3).withDayOfMonth(1));
 		LocalDate endDate = Objects.requireNonNull(monthDate.withDayOfMonth(monthDate.lengthOfMonth()));
 		var transactions = transactionService.getByUserAndDate(userId, startDate, endDate);
 		

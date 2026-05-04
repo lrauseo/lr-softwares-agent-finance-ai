@@ -3,16 +3,16 @@ spring:
     name: finance_ai_agent 
   ai:
     openai:
-      api-key: ${AI_API_KEY:${OPENAI_API_KEY:}}
-      base-url: ${AI_BASE_URL:https://api.openai.com}
+      api-key: ${OPENAI_API_KEY}
+      base-url: ${OPENAI_BASE_URL}
       chat:
-        completions-path: ${AI_CHAT_COMPLETIONS_PATH:/v1/chat/completions}
+        completions-path: ${OPENAI_CHAT_COMPLETIONS_PATH}
         options:
-          model: ${AI_MODEL:gpt-4.1-mini}
+          model: ${OPENAI_MODEL}
       embedding:
-        embeddings-path: ${AI_EMBEDDINGS_PATH:/v1/embeddings}
+        embeddings-path: ${OPENAI_EMBEDDINGS_PATH}
         options:
-          model: ${AI_EMBEDDING_MODEL:text-embedding-3-small}
+          model: ${OPENAI_EMBEDDING_MODEL}
     vectorstore:
       pgvector:
         initialize-schema: true
@@ -20,6 +20,13 @@ spring:
         distance-type: COSINE_DISTANCE
         dimensions: 1536
         table-name: vector_store
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY}
+      base-url: ${DEEPSEEK_BASE_URL}
+      chat:
+        completions-path: ${DEEPSEEK_CHAT_COMPLETIONS_PATH}
+        options:
+          model: ${DEEPSEEK_MODEL_CHAT}
 
 springdoc:
   api-docs:
@@ -43,8 +50,8 @@ app:
   knowledge:
     docs-path: docs/rag
     seed:
-      enabled: true
-      overwrite: true
+      enabled: false
+      overwrite: false
       language: pt-BR
       audience: BEGINNER
 jwt:

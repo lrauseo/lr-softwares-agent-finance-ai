@@ -7,6 +7,7 @@ import java.util.Objects;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 
@@ -21,32 +22,41 @@ public class KnowledgeRetrievalService {
 	private final VectorStore vectorStore;
 
 	public List<Document> retrieve(@NonNull String question) {
+		FilterExpressionBuilder filter = new FilterExpressionBuilder();
+		var expression = filter.and(filter.eq("language", "pt-BT"),
+				filter.or(filter.eq("theme", "educacao_financeira"),
+						filter.in("tags", "educacao_financeira")))
+				.build();
+
 		return vectorStore.similaritySearch(
 				SearchRequest.builder()
 						.query(question)
 						.topK(5)
 						.similarityThreshold(0.70)
-						.filterExpression(
-								"language == 'pt-BR' && (theme == 'educacao_financeira' || tags CONTAINS 'educacao_financeira')")
+						.filterExpression(expression)
 						.build());
 	}
 
 	public List<KnowledgeSearchResponse> search(String query, String language, List<String> sources) {
 		String normalizedLanguage = Objects.requireNonNullElse(language, "pt-BR");
-		String filter = "language == '" + normalizedLanguage + "' && (theme == 'educacao_financeira' || tags CONTAINS 'educacao_financeira')";
-		if (sources != null && !sources.isEmpty()) {
-			String sourceFilter = sources.stream()
-					.map(source -> "source == '" + source + "'")
-					.reduce((a, b) -> a + " || " + b)
-					.orElse("");
-			filter += " && (" + sourceFilter + ")";
-		}
+		
+		FilterExpressionBuilder filterBuilder = new FilterExpressionBuilder();
+		
+		var baseExpression = filterBuilder.and(
+				filterBuilder.eq("language", normalizedLanguage),
+				filterBuilder.or(filterBuilder.eq("theme", "educacao_financeira"), 
+						filterBuilder.in("tags", "educacao_financeira")));
+		
+		var expression = (sources != null && !sources.isEmpty())
+				? filterBuilder.and(baseExpression, filterBuilder.in("source", sources)).build()
+				: baseExpression.build();
+		
 		return vectorStore.similaritySearch(
 				SearchRequest.builder()
 						.query(Objects.requireNonNull(query))
 						.topK(10)
 						.similarityThreshold(0.65)
-						.filterExpression(filter)
+						.filterExpression(expression)
 						.build())
 				.stream()
 				.map(this::toKnowledgeSearchResponse)

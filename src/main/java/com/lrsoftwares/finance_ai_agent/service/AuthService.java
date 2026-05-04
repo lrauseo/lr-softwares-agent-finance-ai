@@ -9,6 +9,7 @@ import com.lrsoftwares.finance_ai_agent.entity.User;
 import com.lrsoftwares.finance_ai_agent.exception.BusinessException;
 import com.lrsoftwares.finance_ai_agent.repository.UserRepository;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -49,4 +50,14 @@ public class AuthService {
 
         return jwtService.generateToken(user.getId());
     }
+
+	public String resetPassword(RegisterUserRequest request) {
+		User user = userRepository.findByEmailIgnoreCase(request.email())
+				.orElseThrow(() -> new BusinessException("E-mail não encontrado."));
+
+		user.setPassword(passwordEncoder.encode(request.password()));
+		userRepository.save(user);
+
+		return jwtService.generateToken(user.getId());
+	}
 }

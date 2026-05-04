@@ -9,11 +9,11 @@ import com.lrsoftwares.finance_ai_agent.service.ai.LLMClient;
 
 import lombok.RequiredArgsConstructor;
 
-@Service("LLMOpenAIClient")
+@Service("LLMDeepSeekClient")
 @RequiredArgsConstructor
-public class LLMOpenAIClientImpl implements LLMClient {
+public class LLMDeepSeekClientImpl implements LLMClient {
 
-	@Qualifier("openAiChatClient")
+	@Qualifier("deepseekChatClient")
 	private final ChatClient chatClient;
 
 	@Override
