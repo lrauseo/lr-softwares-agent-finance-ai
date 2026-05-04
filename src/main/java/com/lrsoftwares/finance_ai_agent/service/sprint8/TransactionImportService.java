@@ -123,7 +123,14 @@ public class TransactionImportService {
     private Map<String, Integer> buildHeaderMap(CSVRecord headerRecord) {
         Map<String, Integer> map = new LinkedHashMap<>();
         for (int i = 0; i < headerRecord.size(); i++) {
-            map.put(headerRecord.get(i).trim().toLowerCase(Locale.ROOT), i);
+            String name = headerRecord.get(i).trim().toLowerCase(Locale.ROOT);
+            if (name.isEmpty()) {
+                throw new IllegalArgumentException("Cabecalho vazio encontrado na coluna " + i);
+            }
+            if (map.containsKey(name)) {
+                throw new IllegalArgumentException("Nome de coluna duplicado no cabecalho: '" + name + "'");
+            }
+            map.put(name, i);
         }
         return map;
     }
@@ -162,7 +169,8 @@ public class TransactionImportService {
     }
 
     private ImportedRow parseCsvRecord(CSVRecord record, ColumnIndices cols) {
-        if (record.size() < 3) {
+        int minRequired = Math.max(cols.date(), Math.max(cols.description(), cols.amount())) + 1;
+        if (record.size() < minRequired) {
             throw new IllegalArgumentException("colunas insuficientes. Esperado: date,description,amount,...");
         }
 

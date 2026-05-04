@@ -225,5 +225,39 @@ class TransactionImportServiceTest {
         assertThat(response.warnings().get(0)).contains("Mapeamento de colunas invalido");
         org.mockito.Mockito.verify(transactionService, org.mockito.Mockito.never()).salvar(any());
     }
+
+    @Test
+    void shouldReturnErrorResponseWhenHeaderHasDuplicateNames() {
+        // CSV with duplicate header column name
+        String csv = "date;description;date\n2026-05-01;Salario;1000.00\n";
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+
+        // Mapping by header name forces header parsing
+        CsvColumnMapping mapping = new CsvColumnMapping("date", "description", "amount", null, null, null);
+
+        var response = service.importCsv(file, mapping);
+
+        assertThat(response.importedCount()).isEqualTo(0);
+        assertThat(response.skippedCount()).isEqualTo(0);
+        assertThat(response.warnings()).hasSize(1);
+        assertThat(response.warnings().get(0)).contains("duplicado");
+        org.mockito.Mockito.verify(transactionService, org.mockito.Mockito.never()).salvar(any());
+    }
+
+    @Test
+    void shouldSkipRecordWhenMappedRequiredColumnIsOutOfRange() {
+        // Mapping puts 'date' at index 5, but record only has 3 columns → insufficient columns
+        String csv = "1000.00;Salario;2026-05-01\n";
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+
+        CsvColumnMapping mapping = new CsvColumnMapping("5", "1", "0", null, null, null);
+
+        var response = service.importCsv(file, mapping);
+
+        assertThat(response.importedCount()).isEqualTo(0);
+        assertThat(response.skippedCount()).isEqualTo(1);
+        assertThat(response.warnings()).isNotEmpty();
+        org.mockito.Mockito.verify(transactionService, org.mockito.Mockito.never()).salvar(any());
+    }
 }
 
