@@ -136,7 +136,12 @@ public class TransactionImportService {
             return defaultIndex;
         }
         try {
-            return Integer.parseInt(spec.trim());
+            int index = Integer.parseInt(spec.trim());
+            if (index < 0) {
+                throw new IllegalArgumentException(
+                        "Indice de coluna invalido para o campo '" + fieldName + "': " + spec + ". O indice deve ser >= 0.");
+            }
+            return index;
         } catch (NumberFormatException e) {
             Integer idx = headerMap.get(spec.trim().toLowerCase(Locale.ROOT));
             if (idx != null) {
