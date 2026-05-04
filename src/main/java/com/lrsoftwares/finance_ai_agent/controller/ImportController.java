@@ -32,8 +32,7 @@ public class ImportController {
             try {
                 mapping = objectMapper.readValue(columnMappingJson, CsvColumnMapping.class);
             } catch (JsonProcessingException e) {
-                return new ImportTransactionsResponse(0, 0,
-                        java.util.List.of("columnMapping invalido: " + e.getOriginalMessage()));
+                throw new IllegalArgumentException("columnMapping invalido: " + e.getOriginalMessage(), e);
             }
         }
         return transactionImportService.importCsv(file, mapping);
