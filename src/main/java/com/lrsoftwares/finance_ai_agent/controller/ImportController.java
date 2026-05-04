@@ -7,6 +7,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.lrsoftwares.finance_ai_agent.dto.sprint8.CsvColumnMapping;
 import com.lrsoftwares.finance_ai_agent.dto.sprint8.ImportTransactionsResponse;
 import com.lrsoftwares.finance_ai_agent.service.sprint8.TransactionImportService;
 
@@ -18,10 +21,22 @@ import lombok.RequiredArgsConstructor;
 public class ImportController {
 
     private final TransactionImportService transactionImportService;
+    private final ObjectMapper objectMapper;
 
     @PostMapping(path = "/csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ImportTransactionsResponse importCsv(@RequestParam("file") MultipartFile file) {
-        return transactionImportService.importCsv(file);
+    public ImportTransactionsResponse importCsv(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "columnMapping", required = false) String columnMappingJson) {
+        CsvColumnMapping mapping = null;
+        if (columnMappingJson != null && !columnMappingJson.isBlank()) {
+            try {
+                mapping = objectMapper.readValue(columnMappingJson, CsvColumnMapping.class);
+            } catch (JsonProcessingException e) {
+                return new ImportTransactionsResponse(0, 0,
+                        java.util.List.of("columnMapping invalido: " + e.getOriginalMessage()));
+            }
+        }
+        return transactionImportService.importCsv(file, mapping);
     }
 
     @PostMapping(path = "/ofx", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -29,3 +44,4 @@ public class ImportController {
         return transactionImportService.importOfx(file);
     }
 }
+

@@ -8,8 +8,10 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -24,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.lrsoftwares.finance_ai_agent.config.security.AuthenticatedUserProvider;
 import com.lrsoftwares.finance_ai_agent.dto.CreateTransactionRequest;
+import com.lrsoftwares.finance_ai_agent.dto.sprint8.CsvColumnMapping;
 import com.lrsoftwares.finance_ai_agent.dto.sprint8.ImportTransactionsResponse;
 import com.lrsoftwares.finance_ai_agent.entity.Category;
 import com.lrsoftwares.finance_ai_agent.entity.TransactionType;
@@ -44,6 +47,10 @@ public class TransactionImportService {
     private final ExpenseAutoClassificationService expenseAutoClassificationService;
 
     public ImportTransactionsResponse importCsv(MultipartFile file) {
+        return importCsv(file, null);
+    }
+
+    public ImportTransactionsResponse importCsv(MultipartFile file, CsvColumnMapping columnMapping) {
         List<String> warnings = new ArrayList<>();
         int imported = 0;
         int skipped = 0;
@@ -64,17 +71,26 @@ public class TransactionImportService {
                     .setTrim(false)
                     .build();
 
+            ColumnIndices columnIndices = null;
+
             try (CSVParser parser = CSVParser.parse(new StringReader(content), format)) {
                 for (CSVRecord record : parser) {
                     if (isBlankRecord(record)) {
                         continue;
                     }
-                    if (record.getRecordNumber() == 1 && looksLikeHeader(record)) {
+                    if (record.getRecordNumber() == 1
+                            && (looksLikeHeader(record) || mappingRequiresHeader(columnMapping))) {
+                        Map<String, Integer> headerMap = buildHeaderMap(record);
+                        columnIndices = resolveColumnIndices(columnMapping, headerMap);
                         continue;
                     }
 
+                    if (columnIndices == null) {
+                        columnIndices = resolveColumnIndices(columnMapping, Map.of());
+                    }
+
                     try {
-                        ImportedRow row = parseCsvRecord(record);
+                        ImportedRow row = parseCsvRecord(record, columnIndices);
                         saveImportedRow(row);
                         imported++;
                     } catch (Exception ex) {
@@ -94,25 +110,65 @@ public class TransactionImportService {
         }
     }
 
-    private ImportedRow parseCsvRecord(CSVRecord record) {
+    private Map<String, Integer> buildHeaderMap(CSVRecord headerRecord) {
+        Map<String, Integer> map = new LinkedHashMap<>();
+        for (int i = 0; i < headerRecord.size(); i++) {
+            map.put(headerRecord.get(i).trim().toLowerCase(Locale.ROOT), i);
+        }
+        return map;
+    }
+
+    private ColumnIndices resolveColumnIndices(CsvColumnMapping mapping, Map<String, Integer> headerMap) {
+        if (mapping == null) {
+            return new ColumnIndices(0, 1, 2, 3, 4, 5);
+        }
+        return new ColumnIndices(
+                resolveIndex(mapping.date(), headerMap, "date", 0),
+                resolveIndex(mapping.description(), headerMap, "description", 1),
+                resolveIndex(mapping.amount(), headerMap, "amount", 2),
+                resolveIndex(mapping.type(), headerMap, "type", 3),
+                resolveIndex(mapping.category(), headerMap, "category", 4),
+                resolveIndex(mapping.recurring(), headerMap, "recurring", 5));
+    }
+
+    private int resolveIndex(String spec, Map<String, Integer> headerMap, String fieldName, int defaultIndex) {
+        if (spec == null || spec.isBlank()) {
+            return defaultIndex;
+        }
+        try {
+            return Integer.parseInt(spec.trim());
+        } catch (NumberFormatException e) {
+            Integer idx = headerMap.get(spec.trim().toLowerCase(Locale.ROOT));
+            if (idx != null) {
+                return idx;
+            }
+            throw new IllegalArgumentException("Coluna nao encontrada para o campo '" + fieldName + "': " + spec);
+        }
+    }
+
+    private ImportedRow parseCsvRecord(CSVRecord record, ColumnIndices cols) {
         if (record.size() < 3) {
             throw new IllegalArgumentException("colunas insuficientes. Esperado: date,description,amount,...");
         }
 
-        String dateValue = valueAt(record, 0);
-        String description = valueAt(record, 1);
-        String amountValue = valueAt(record, 2);
+        String dateValue = valueAt(record, cols.date());
+        String description = valueAt(record, cols.description());
+        String amountValue = valueAt(record, cols.amount());
+
+        if (dateValue == null || description == null || amountValue == null) {
+            throw new IllegalArgumentException("colunas obrigatorias ausentes (date, description, amount)");
+        }
 
         LocalDate date = parseDate(dateValue);
         BigDecimal rawAmount = parseAmount(amountValue);
 
-        String typeValue = valueAt(record, 3);
+        String typeValue = cols.type() >= 0 ? valueAt(record, cols.type()) : null;
         TransactionType type = (typeValue != null && !typeValue.isBlank())
                 ? parseType(typeValue, rawAmount)
                 : (rawAmount.signum() < 0 ? TransactionType.EXPENSE : TransactionType.INCOME);
 
-        String categoryName = valueAt(record, 4);
-        String recurringValue = valueAt(record, 5);
+        String categoryName = cols.category() >= 0 ? valueAt(record, cols.category()) : null;
+        String recurringValue = cols.recurring() >= 0 ? valueAt(record, cols.recurring()) : null;
         boolean recurring = recurringValue != null && Boolean.parseBoolean(recurringValue.trim());
 
         return new ImportedRow(date, description, rawAmount.abs(), type, categoryName, recurring);
@@ -120,6 +176,27 @@ public class TransactionImportService {
 
     private char detectDelimiter(String headerLine) {
         return headerLine.contains(";") ? ';' : ',';
+    }
+
+    private boolean mappingRequiresHeader(CsvColumnMapping mapping) {
+        if (mapping == null) {
+            return false;
+        }
+        return isHeaderName(mapping.date()) || isHeaderName(mapping.description())
+                || isHeaderName(mapping.amount()) || isHeaderName(mapping.type())
+                || isHeaderName(mapping.category()) || isHeaderName(mapping.recurring());
+    }
+
+    private boolean isHeaderName(String spec) {
+        if (spec == null || spec.isBlank()) {
+            return false;
+        }
+        try {
+            Integer.parseInt(spec.trim());
+            return false;
+        } catch (NumberFormatException e) {
+            return true;
+        }
     }
 
     private boolean isBlankRecord(CSVRecord record) {
@@ -298,6 +375,9 @@ public class TransactionImportService {
             }
         }
         return null;
+    }
+
+    private record ColumnIndices(int date, int description, int amount, int type, int category, int recurring) {
     }
 
     private record ImportedRow(
