@@ -23,6 +23,11 @@ public class AuthController {
 		return new AuthResponse(authService.register(request));
 	}
 
+	@PostMapping("/reset")
+	public AuthResponse resetPassword(@RequestBody @Valid RegisterUserRequest request) {
+		return new AuthResponse(authService.resetPassword(request));
+	}
+
 	@PostMapping("/login")
 	public AuthResponse login(@RequestBody @Valid AuthRequest request) {
 		return new AuthResponse(authService.login(request.email(), request.password()));

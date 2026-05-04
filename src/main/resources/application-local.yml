@@ -23,8 +23,8 @@ app:
   knowledge:
     docs-path: docs/rag
     seed:
-      enabled: true
-      overwrite: true
+      enabled: false
+      overwrite: false
       language: pt-BR
       audience: BEGINNER
 jwt:

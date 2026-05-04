@@ -19,25 +19,25 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  app:
-    build: .
-    container_name: finance_ai_agent-app
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      POSTGRES_USER: finance_user
-      POSTGRES_PASSWORD: finance_pass
-      AI_API_KEY: ${OPENAI_API_KEY}      
-      AI_BASE_URL: "https://models.inference.ai.azure.com"
-      AI_CHAT_COMPLETIONS_PATH: "/chat/completions"
-      AI_EMBEDDINGS_PATH: "/embeddings"
-      AI_MODEL: "gpt-4o-mini"
-      AI_EMBEDDING_MODEL: "text-embedding-3-small"
-      JWT_SECRET: ${JWT_SECRET}
-    ports:
-      - "8080:8080"
+  # app:
+  #   build: .
+  #   container_name: finance_ai_agent-app
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: docker
+  #     POSTGRES_USER: finance_user
+  #     POSTGRES_PASSWORD: finance_pass
+  #     AI_API_KEY: ${OPENAI_API_KEY}      
+  #     AI_BASE_URL: "https://models.inference.ai.azure.com"
+  #     AI_CHAT_COMPLETIONS_PATH: "/chat/completions"
+  #     AI_EMBEDDINGS_PATH: "/embeddings"
+  #     AI_MODEL: "gpt-4o-mini"
+  #     AI_EMBEDDING_MODEL: "text-embedding-3-small"
+  #     JWT_SECRET: ${JWT_SECRET}
+  #   ports:
+  #     - "8080:8080"
 
 volumes:
   postgres_data:

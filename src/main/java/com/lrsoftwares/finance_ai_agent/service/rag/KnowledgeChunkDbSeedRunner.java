@@ -38,6 +38,9 @@ public class KnowledgeChunkDbSeedRunner implements CommandLineRunner {
     @Value("${app.knowledge.seed.overwrite:true}")
     private boolean overwrite;
 
+    @Value("${app.knowledge.seed.delay-ms:4500}")
+    private long delayBetweenFilesMs;
+
     @Override
     public void run(String... args) {
         if (!seedEnabled) {
@@ -63,6 +66,9 @@ public class KnowledgeChunkDbSeedRunner implements CommandLineRunner {
             return;
         }
 
+        log.info("Iniciando seed de knowledge. Arquivos encontrados: {} | Delay entre arquivos: {}ms",
+                markdownFiles.size(), delayBetweenFilesMs);
+
         int inserted = 0;
         int skipped = 0;
 
@@ -86,6 +92,16 @@ public class KnowledgeChunkDbSeedRunner implements CommandLineRunner {
                 inserted += previousCount;
             } catch (RuntimeException ex) {
                 log.warn("Falha ao ingerir arquivo de seed: {}", source, ex);
+            }
+
+            if (delayBetweenFilesMs > 0) {
+                try {
+                    Thread.sleep(delayBetweenFilesMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Seed interrompido durante espera entre arquivos.");
+                    break;
+                }
             }
         }
 

@@ -23,9 +23,11 @@ import com.lrsoftwares.finance_ai_agent.service.rag.KnowledgeRetrievalService;
 
 import jakarta.annotation.Nonnull;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 
 @Service
 @RequiredArgsConstructor
+@Log4j2
 public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatService {
 
 	private final FinancialAnalysisService analysisService;
@@ -41,7 +43,12 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 		YearMonth currentMonth = Objects.requireNonNull(YearMonth.now(), "Não foi possível obter o mês atual");
 
 		FinancialDiagnosisResponse analysis = analysisService.analyzeMonthly(request.userId(), currentMonth);
-		var retrievedChunks = knowledgeRetrievalService.retrieve(Objects.requireNonNull(request.question()));
+		List<Document> retrievedChunks = null;
+		try {
+			retrievedChunks = knowledgeRetrievalService.retrieve(Objects.requireNonNull(request.question()));
+		} catch (Exception e) {
+			log.error(e.getMessage());
+		}
 		String context = buildFullContext(history, analysis, retrievedChunks);
 
 		String userPrompt = Objects.requireNonNull(buildUserPrompt(request.question()),
