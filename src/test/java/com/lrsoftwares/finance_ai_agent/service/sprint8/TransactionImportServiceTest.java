@@ -240,7 +240,7 @@ class TransactionImportServiceTest {
         assertThat(response.importedCount()).isEqualTo(0);
         assertThat(response.skippedCount()).isEqualTo(0);
         assertThat(response.warnings()).hasSize(1);
-        assertThat(response.warnings().get(0)).contains("duplicado");
+        assertThat(response.warnings().get(0)).contains("Cabeçalho CSV inválido");
         org.mockito.Mockito.verify(transactionService, org.mockito.Mockito.never()).salvar(any());
     }
 
@@ -258,6 +258,68 @@ class TransactionImportServiceTest {
         assertThat(response.skippedCount()).isEqualTo(1);
         assertThat(response.warnings()).isNotEmpty();
         org.mockito.Mockito.verify(transactionService, org.mockito.Mockito.never()).salvar(any());
+    }
+
+    @Test
+    void shouldStripBomAndImportSuccessfully() {
+        UUID userId = UUID.randomUUID();
+        UUID categoryId = UUID.randomUUID();
+
+        Category category = Category.builder()
+                .id(categoryId)
+                .userId(userId)
+                .name("Alimentacao")
+                .type(TransactionType.EXPENSE)
+                .systemDefault(false)
+                .build();
+
+        // BOM prefix simulates an Excel UTF-8 BOM export
+        String csv = "\uFEFFdate;description;amount;type;category;recurring\n"
+                + "2026-05-03;Padaria;15.00;EXPENSE;Alimentacao;false\n";
+
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv",
+                csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        when(authenticatedUserProvider.getUserId()).thenReturn(userId);
+        when(categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, "Alimentacao", TransactionType.EXPENSE))
+                .thenReturn(Optional.of(category));
+
+        var response = service.importCsv(file);
+
+        assertThat(response.importedCount()).isEqualTo(1);
+        assertThat(response.skippedCount()).isEqualTo(0);
+    }
+
+    @Test
+    void shouldIgnoreDuplicateHeaderSilentlyWhenOnlyIndexMappingUsed() {
+        UUID userId = UUID.randomUUID();
+        UUID categoryId = UUID.randomUUID();
+
+        Category category = Category.builder()
+                .id(categoryId)
+                .userId(userId)
+                .name("Alimentacao")
+                .type(TransactionType.EXPENSE)
+                .systemDefault(false)
+                .build();
+
+        // CSV where looksLikeHeader returns true (first 3 columns match) but has an extra duplicate column.
+        // With index-based mapping, the header row is skipped silently (no duplicate validation).
+        String csv = "date;description;amount;date\n2026-05-01;Padaria;-50.00;EXPENSE;Alimentacao;false\n";
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+
+        // Index-based mapping: no header name resolution needed
+        CsvColumnMapping mapping = new CsvColumnMapping("0", "1", "2", null, null, null);
+
+        when(authenticatedUserProvider.getUserId()).thenReturn(userId);
+        when(categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, "Alimentacao", TransactionType.EXPENSE))
+                .thenReturn(Optional.of(category));
+
+        var response = service.importCsv(file, mapping);
+
+        // Header row skipped silently; data row should be processed
+        assertThat(response.importedCount()).isEqualTo(1);
+        assertThat(response.skippedCount()).isEqualTo(0);
     }
 }
 

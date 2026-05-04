@@ -57,6 +57,10 @@ public class TransactionImportService {
 
         try {
             String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            // Strip UTF-8 BOM if present (common in Excel-exported CSVs)
+            if (content.startsWith("\uFEFF")) {
+                content = content.substring(1);
+            }
             String[] lines = content.split("\\R", 2);
             if (lines.length == 0 || lines[0].isBlank()) {
                 return new ImportTransactionsResponse(0, 0, List.of("Arquivo CSV sem linhas de dados."));
@@ -80,13 +84,22 @@ public class TransactionImportService {
                     }
                     if (record.getRecordNumber() == 1
                             && (looksLikeHeader(record) || mappingRequiresHeader(columnMapping))) {
-                        try {
-                            Map<String, Integer> headerMap = buildHeaderMap(record);
-                            columnIndices = resolveColumnIndices(columnMapping, headerMap);
-                        } catch (IllegalArgumentException ex) {
-                            return new ImportTransactionsResponse(0, 0,
-                                    List.of("Mapeamento de colunas invalido: " + ex.getMessage()));
+                        if (mappingRequiresHeader(columnMapping)) {
+                            Map<String, Integer> headerMap;
+                            try {
+                                headerMap = buildHeaderMap(record);
+                            } catch (IllegalArgumentException ex) {
+                                return new ImportTransactionsResponse(0, 0,
+                                        List.of("Cabeçalho CSV inválido: " + ex.getMessage()));
+                            }
+                            try {
+                                columnIndices = resolveColumnIndices(columnMapping, headerMap);
+                            } catch (IllegalArgumentException ex) {
+                                return new ImportTransactionsResponse(0, 0,
+                                        List.of("Mapeamento de colunas invalido: " + ex.getMessage()));
+                            }
                         }
+                        // else: header row detected but only index-based mapping (or no mapping) — skip row silently
                         continue;
                     }
 
