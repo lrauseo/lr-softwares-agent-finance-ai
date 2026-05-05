@@ -62,7 +62,9 @@ public class ImportController {
         responses = {
             @ApiResponse(responseCode = "200", description = "Importação processada (pode conter warnings de registros ignorados)"),
             @ApiResponse(responseCode = "400", description = "JSON de columnMapping inválido ou malformado",
-                content = @Content(schema = @Schema(implementation = Void.class)))
+                content = @Content(
+                    mediaType = "application/problem+json",
+                    schema = @Schema(implementation = org.springframework.http.ProblemDetail.class)))
         }
     )
     @PostMapping(path = "/csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -58,7 +59,7 @@ class TransactionImportServiceTest {
         String csv = "date;description;amount;type;category;recurring\n"
                 + "2026-04-12;\"Mercado, atacado\";120.50;EXPENSE;Alimentacao;false\n";
 
-        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
 
         when(authenticatedUserProvider.getUserId()).thenReturn(userId);
         when(categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, "Alimentacao", TransactionType.EXPENSE))
@@ -81,7 +82,7 @@ class TransactionImportServiceTest {
     @Test
     void shouldSkipBrokenCsvRecordAndCollectWarning() {
         String csv = "date;description;amount\n2026-04-10;Compra;abc\n";
-        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
 
         var response = service.importCsv(file);
 
@@ -107,7 +108,7 @@ class TransactionImportServiceTest {
         // CSV has columns in non-standard order: amount;type;date;description;category;recurring
         String csv = "250.00;INCOME;2026-05-01;Salario mensal;Salario;false\n";
 
-        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
 
         CsvColumnMapping mapping = new CsvColumnMapping("2", "3", "0", "1", "4", "5");
 
@@ -145,7 +146,7 @@ class TransactionImportServiceTest {
         String csv = "valor;tipo;dt;descricao;categoria;recorrente\n"
                 + "80.00;EXPENSE;2026-05-02;Supermercado;Alimentacao;false\n";
 
-        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
 
         CsvColumnMapping mapping = new CsvColumnMapping("dt", "descricao", "valor", "tipo", "categoria", "recorrente");
 
@@ -182,7 +183,7 @@ class TransactionImportServiceTest {
         String csv = "date;description;amount;type;category;recurring\n"
                 + "2026-04-12;Padaria;30.00;EXPENSE;Alimentacao;false\n";
 
-        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
 
         when(authenticatedUserProvider.getUserId()).thenReturn(userId);
         when(categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, "Alimentacao", TransactionType.EXPENSE))
@@ -197,7 +198,7 @@ class TransactionImportServiceTest {
     @Test
     void shouldReturnErrorResponseWhenMappingReferencesNonexistentHeader() {
         String csv = "date;description;amount\n2026-05-01;Salario;1000.00\n";
-        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
 
         CsvColumnMapping mapping = new CsvColumnMapping("nonexistent", "description", "amount", null, null, null);
 
@@ -213,7 +214,7 @@ class TransactionImportServiceTest {
     @Test
     void shouldReturnErrorResponseWhenMappingHasNegativeIndex() {
         String csv = "2026-05-01;Salario;1000.00\n";
-        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
 
         CsvColumnMapping mapping = new CsvColumnMapping("-1", "1", "2", null, null, null);
 
@@ -230,7 +231,7 @@ class TransactionImportServiceTest {
     void shouldReturnErrorResponseWhenHeaderHasDuplicateNames() {
         // CSV with duplicate header column name
         String csv = "date;description;date\n2026-05-01;Salario;1000.00\n";
-        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
 
         // Mapping by header name forces header parsing
         CsvColumnMapping mapping = new CsvColumnMapping("date", "description", "amount", null, null, null);
@@ -248,7 +249,7 @@ class TransactionImportServiceTest {
     void shouldSkipRecordWhenMappedRequiredColumnIsOutOfRange() {
         // Mapping puts 'date' at index 5, but record only has 3 columns → insufficient columns
         String csv = "1000.00;Salario;2026-05-01\n";
-        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
 
         CsvColumnMapping mapping = new CsvColumnMapping("5", "1", "0", null, null, null);
 
@@ -278,7 +279,7 @@ class TransactionImportServiceTest {
                 + "2026-05-03;Padaria;15.00;EXPENSE;Alimentacao;false\n";
 
         MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv",
-                csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                csv.getBytes(StandardCharsets.UTF_8));
 
         when(authenticatedUserProvider.getUserId()).thenReturn(userId);
         when(categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, "Alimentacao", TransactionType.EXPENSE))
@@ -306,7 +307,7 @@ class TransactionImportServiceTest {
         // CSV where looksLikeHeader returns true (first 3 columns match) but has an extra duplicate column.
         // With index-based mapping, the header row is skipped silently (no duplicate validation).
         String csv = "date;description;amount;date\n2026-05-01;Padaria;-50.00;EXPENSE;Alimentacao;false\n";
-        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes());
+        MockMultipartFile file = new MockMultipartFile("file", "dados.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
 
         // Index-based mapping: no header name resolution needed
         CsvColumnMapping mapping = new CsvColumnMapping("0", "1", "2", null, null, null);
