@@ -36,284 +36,315 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class TransactionImportService {
 
-    private static final Pattern OFX_TAG_PATTERN = Pattern.compile("<([A-Z0-9]+)>([^<\\r\\n]+)", Pattern.CASE_INSENSITIVE);
+	private static final Pattern OFX_TAG_PATTERN = Pattern.compile("<([A-Z0-9]+)>([^<\\r\\n]+)",
+			Pattern.CASE_INSENSITIVE);
 
-    private final AuthenticatedUserProvider authenticatedUserProvider;
-    private final CategoryRepository categoryRepository;
-    private final TransactionService transactionService;
-    private final ExpenseAutoClassificationService expenseAutoClassificationService;
+	private final AuthenticatedUserProvider authenticatedUserProvider;
+	private final CategoryRepository categoryRepository;
+	private final TransactionService transactionService;
+	private final ExpenseAutoClassificationService expenseAutoClassificationService;
 
-    public ImportTransactionsResponse importCsv(MultipartFile file) {
-        List<String> warnings = new ArrayList<>();
-        int imported = 0;
-        int skipped = 0;
+	public ImportTransactionsResponse importCsv(MultipartFile file) {
+		List<String> warnings = new ArrayList<>();
+		int imported = 0;
+		int skipped = 0;
 
-        try {
-            String content = new String(file.getBytes(), StandardCharsets.UTF_8);
-            String[] lines = content.split("\\R", 2);
-            if (lines.length == 0 || lines[0].isBlank()) {
-                return new ImportTransactionsResponse(0, 0, List.of("Arquivo CSV sem linhas de dados."));
-            }
+		try {
+			String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+			String[] lines = content.split("\\R", 2);
+			if (lines.length == 0 || lines[0].isBlank()) {
+				return new ImportTransactionsResponse(0, 0, List.of("Arquivo CSV sem linhas de dados."));
+			}
 
-            char delimiter = detectDelimiter(lines[0]);
-            CSVFormat format = CSVFormat.DEFAULT.builder()
-                    .setDelimiter(delimiter)
-                    .setQuote('"')
-                    .setEscape('\\')
-                    .setIgnoreEmptyLines(true)
-                    .setTrim(false)
-                    .build();
+			char delimiter = detectDelimiter(lines[0]);
+			CSVFormat format = CSVFormat.DEFAULT.builder()
+					.setDelimiter(delimiter)
+					.setQuote('"')
+					.setEscape('\\')
+					.setIgnoreEmptyLines(true)
+					.setTrim(false)
+					.build();
 
-            try (CSVParser parser = CSVParser.parse(new StringReader(content), format)) {
-                for (CSVRecord record : parser) {
-                    if (isBlankRecord(record)) {
-                        continue;
-                    }
-                    if (record.getRecordNumber() == 1 && looksLikeHeader(record)) {
-                        continue;
-                    }
+			try (CSVParser parser = CSVParser.parse(new StringReader(content), format)) {
+				for (CSVRecord record : parser) {
+					if (isBlankRecord(record)) {
+						continue;
+					}
+					if (record.getRecordNumber() == 1 && looksLikeHeader(record)) {
+						continue;
+					}
 
-                    try {
-                        ImportedRow row = parseCsvRecord(record);
-                        saveImportedRow(row);
-                        imported++;
-                    } catch (Exception ex) {
-                        skipped++;
-                        warnings.add("Registro " + record.getRecordNumber() + " ignorado: " + ex.getMessage());
-                    }
-                }
-            }
+					try {
+						ImportedRow row = parseCsvRecord(record);
+						saveImportedRow(row);
+						imported++;
+					} catch (Exception ex) {
+						skipped++;
+						warnings.add("Registro " + record.getRecordNumber() + " ignorado: " + ex.getMessage());
+					}
+				}
+			}
 
-            if (imported == 0 && skipped == 0) {
-                return new ImportTransactionsResponse(0, 0, List.of("Arquivo CSV sem linhas de dados."));
-            }
+			if (imported == 0 && skipped == 0) {
+				return new ImportTransactionsResponse(0, 0, List.of("Arquivo CSV sem linhas de dados."));
+			}
 
-            return new ImportTransactionsResponse(imported, skipped, warnings);
-        } catch (IOException ex) {
-            return new ImportTransactionsResponse(0, 1, List.of("Falha ao ler arquivo CSV: " + ex.getMessage()));
-        }
-    }
+			return new ImportTransactionsResponse(imported, skipped, warnings);
+		} catch (IOException ex) {
+			return new ImportTransactionsResponse(0, 1, List.of("Falha ao ler arquivo CSV: " + ex.getMessage()));
+		}
+	}
 
-    private ImportedRow parseCsvRecord(CSVRecord record) {
-        if (record.size() < 3) {
-            throw new IllegalArgumentException("colunas insuficientes. Esperado: date,description,amount,...");
-        }
+	private ImportedRow parseCsvRecord(CSVRecord record) {
+		if (record.size() < 3) {
+			throw new IllegalArgumentException("colunas insuficientes. Esperado: date,description,amount,...");
+		}
 
-        String dateValue = valueAt(record, 0);
-        String description = valueAt(record, 1);
-        String amountValue = valueAt(record, 3);
+		String dateValue = valueAt(record, 0);
+		String description = valueAt(record, 1);
+		String amountValue = valueAt(record, 3);
 
-        LocalDate date = parseDate(dateValue);
-        BigDecimal rawAmount = parseAmount(amountValue);
+		LocalDate date = parseDate(dateValue);
+		BigDecimal rawAmount = parseAmount(amountValue);
 
-        String typeValue = valueAt(record, 3);
-        TransactionType type = (typeValue != null && !typeValue.isBlank())
-                ? parseType(typeValue, rawAmount)
-                : (rawAmount.signum() < 0 ? TransactionType.EXPENSE : TransactionType.INCOME);
+		String typeValue = valueAt(record, 3);
+		TransactionType type = (typeValue != null && !typeValue.isBlank())
+				? parseType(typeValue, rawAmount)
+				: (rawAmount.signum() < 0 ? TransactionType.EXPENSE : TransactionType.INCOME);
 
-        String categoryName = valueAt(record, 2);
-        String recurringValue = valueAt(record, 5);
-        boolean recurring = recurringValue != null && Boolean.parseBoolean(recurringValue.trim());
+		String categoryName = valueAt(record, 2);
+		if (categoryName != null && !categoryName.isBlank()
+				&& (categoryName.trim().equalsIgnoreCase("outros")
+						|| categoryName.trim().equalsIgnoreCase("outras receitas"))) {
+			String tags = valueAt(record, 4);
+			if (isInternalTransfer(tags)) {
+				type = TransactionType.TRANSFER;
+				categoryName = "Transferência entre contas";
+			}
+		}
+		String recurringValue = valueAt(record, 5);
+		boolean recurring = recurringValue != null && Boolean.parseBoolean(recurringValue.trim());
 
-        return new ImportedRow(date, description, rawAmount.abs(), type, categoryName, recurring);
-    }
+		return new ImportedRow(date, description, rawAmount.abs(), type, categoryName, recurring);
+	}
 
-    private char detectDelimiter(String headerLine) {
-        return headerLine.contains(";") ? ';' : ',';
-    }
+	private char detectDelimiter(String headerLine) {
+		return headerLine.contains(";") ? ';' : ',';
+	}
 
-    private boolean isBlankRecord(CSVRecord record) {
-        for (int i = 0; i < record.size(); i++) {
-            if (!record.get(i).trim().isBlank()) {
-                return false;
-            }
-        }
-        return true;
-    }
+	private boolean isBlankRecord(CSVRecord record) {
+		for (int i = 0; i < record.size(); i++) {
+			if (!record.get(i).trim().isBlank()) {
+				return false;
+			}
+		}
+		return true;
+	}
 
-    private boolean looksLikeHeader(CSVRecord record) {
-        String first = valueAt(record, 0);
-        String second = valueAt(record, 1);
-        String third = valueAt(record, 2);
+	private boolean looksLikeHeader(CSVRecord record) {
+		String first = valueAt(record, 0);
+		String second = valueAt(record, 1);
+		String third = valueAt(record, 2);
 
-        if (first == null || second == null || third == null) {
-            return false;
-        }
+		if (first == null || second == null || third == null) {
+			return false;
+		}
 
-        String f = first.trim().toLowerCase(Locale.ROOT);
-        String s = second.trim().toLowerCase(Locale.ROOT);
-        String t = third.trim().toLowerCase(Locale.ROOT);
+		String f = first.trim().toLowerCase(Locale.ROOT);
+		String s = second.trim().toLowerCase(Locale.ROOT);
+		String t = third.trim().toLowerCase(Locale.ROOT);
 
-        return (f.equals("date") || f.equals("data"))
-                && (s.equals("description") || s.equals("descricao"))
-                && (t.equals("amount") || t.equals("valor"));
-    }
+		return (f.equals("date") || f.equals("data"))
+				&& (s.equals("description") || s.equals("descricao"))
+				&& (t.equals("amount") || t.equals("valor"));
+	}
 
-    private String valueAt(CSVRecord record, int index) {
-        if (index >= record.size()) {
-            return null;
-        }
-        String value = record.get(index);
-        return value == null ? null : value.trim();
-    }
+	private String valueAt(CSVRecord record, int index) {
+		if (index >= record.size()) {
+			return null;
+		}
+		String value = record.get(index);
+		return value == null ? null : value.trim();
+	}
 
-    public ImportTransactionsResponse importOfx(MultipartFile file) {
-        List<String> warnings = new ArrayList<>();
-        int imported = 0;
-        int skipped = 0;
+	public ImportTransactionsResponse importOfx(MultipartFile file) {
+		List<String> warnings = new ArrayList<>();
+		int imported = 0;
+		int skipped = 0;
 
-        try {
-            String content = new String(file.getBytes(), StandardCharsets.UTF_8);
-            String[] blocks = content.split("<STMTTRN>");
+		try {
+			String content = new String(file.getBytes(), StandardCharsets.UTF_8);
+			String[] blocks = content.split("<STMTTRN>");
 
-            for (int i = 1; i < blocks.length; i++) {
-                String block = blocks[i];
-                try {
-                    ImportedRow row = parseOfxBlock(block);
-                    saveImportedRow(row);
-                    imported++;
-                } catch (Exception ex) {
-                    skipped++;
-                    warnings.add("Transacao OFX " + i + " ignorada: " + ex.getMessage());
-                }
-            }
+			for (int i = 1; i < blocks.length; i++) {
+				String block = blocks[i];
+				try {
+					ImportedRow row = parseOfxBlock(block);
+					saveImportedRow(row);
+					imported++;
+				} catch (Exception ex) {
+					skipped++;
+					warnings.add("Transacao OFX " + i + " ignorada: " + ex.getMessage());
+				}
+			}
 
-            return new ImportTransactionsResponse(imported, skipped, warnings);
-        } catch (IOException ex) {
-            return new ImportTransactionsResponse(0, 1, List.of("Falha ao ler arquivo OFX: " + ex.getMessage()));
-        }
-    }
+			return new ImportTransactionsResponse(imported, skipped, warnings);
+		} catch (IOException ex) {
+			return new ImportTransactionsResponse(0, 1, List.of("Falha ao ler arquivo OFX: " + ex.getMessage()));
+		}
+	}
 
-    private ImportedRow parseOfxBlock(String block) {
-        String dateTag = extractTag(block, "DTPOSTED");
-        String amountTag = extractTag(block, "TRNAMT");
-        String memo = extractTag(block, "MEMO");
-        String name = extractTag(block, "NAME");
-        String typeTag = extractTag(block, "TRNTYPE");
+	private ImportedRow parseOfxBlock(String block) {
+		String dateTag = extractTag(block, "DTPOSTED");
+		String amountTag = extractTag(block, "TRNAMT");
+		String memo = extractTag(block, "MEMO");
+		String name = extractTag(block, "NAME");
+		String typeTag = extractTag(block, "TRNTYPE");
 
-        LocalDate date = parseOfxDate(dateTag);
-        BigDecimal rawAmount = parseAmount(amountTag);
-        TransactionType type = parseType(typeTag, rawAmount);
+		LocalDate date = parseOfxDate(dateTag);
+		BigDecimal rawAmount = parseAmount(amountTag);
+		TransactionType type = parseType(typeTag, rawAmount);
 
-        String description = (Objects.toString(name, "") + " " + Objects.toString(memo, "")).trim();
-        if (description.isBlank()) {
-            description = "Importacao OFX";
-        }
+		String description = (Objects.toString(name, "") + " " + Objects.toString(memo, "")).trim();
+		if (description.isBlank()) {
+			description = "Importacao OFX";
+		}
 
-        return new ImportedRow(date, description, rawAmount.abs(), type, null, false);
-    }
+		return new ImportedRow(date, description, rawAmount.abs(), type, null, false);
+	}
 
-    private void saveImportedRow(ImportedRow row) {
-        UUID userId = authenticatedUserProvider.getUserId();
-        Category category = resolveCategory(userId, row.categoryName(), row.type(), row.description());
+	private void saveImportedRow(ImportedRow row) {
+		UUID userId = authenticatedUserProvider.getUserId();
+		Category category = resolveCategory(userId, row.categoryName(), row.type(), row.description());
 
-        CreateTransactionRequest request = new CreateTransactionRequest(
-                userId,
-                category.getId(),
-                row.date(),
-                row.amount(),
-                row.type(),
-                row.description(),
-                row.recurring());
+		CreateTransactionRequest request = new CreateTransactionRequest(
+				userId,
+				category.getId(),
+				row.date(),
+				row.amount(),
+				row.type(),
+				row.description(),
+				row.recurring());
 
-        transactionService.salvar(request);
-    }
+		transactionService.salvar(request);
+	}
 
-    private Category resolveCategory(UUID userId, String categoryName, TransactionType type, String description) {
-        if (categoryName != null && !categoryName.isBlank()) {
-            String normalizedCategoryName = categoryName.trim();
-            var found = categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, normalizedCategoryName, type);
-            if (found.isPresent()) {
-                return found.get();
-            }
+	private boolean isInternalTransfer(String tags) {
+		if (tags == null || tags.isBlank()) {
+			return false;
+		}
+		String normalized = tags.trim().toLowerCase(Locale.ROOT);
+		return normalized.contains("movimentacao interna")
+				|| normalized.contains("transferencia interna")
+				|| normalized.contains("transferência interna")
+				|| normalized.contains("movimentação interna")
+				|| normalized.contains("entre contas")
+				|| normalized.contains("internal transfer");
+	}
 
-            return categoryRepository.save(Category.builder()
-                    .userId(userId)
-                    .name(normalizedCategoryName)
-                    .type(type)
-                    .systemDefault(Boolean.FALSE)
-                    .build());
-        }
+	private Category resolveCategory(UUID userId, String categoryName, TransactionType type, String description) {
+		if (categoryName != null && !categoryName.isBlank()) {
+			String normalizedCategoryName = categoryName.trim();
+			var found = categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, normalizedCategoryName, type);
+			if (found.isPresent()) {
+				return found.get();
+			}
 
-        if (type == TransactionType.EXPENSE) {
-            var classified = expenseAutoClassificationService.classify(userId, description);
-            return categoryRepository.findById(classified.categoryId())
-                    .orElseGet(() -> createFallbackCategory(userId, type));
-        }
+			return categoryRepository.save(Category.builder()
+					.userId(userId)
+					.name(normalizedCategoryName)
+					.type(type)
+					.systemDefault(Boolean.FALSE)
+					.build());
+		}
 
-        return createFallbackCategory(userId, type);
-    }
+		if (type == TransactionType.TRANSFER) {
+			return createFallbackCategory(userId, type);
+		}
 
-    private Category createFallbackCategory(UUID userId, TransactionType type) {
-        String defaultName = type == TransactionType.EXPENSE ? "Outras despesas" : "Outras receitas";
+		if (type == TransactionType.EXPENSE) {
+			var classified = expenseAutoClassificationService.classify(userId, description);
+			return categoryRepository.findById(classified.categoryId())
+					.orElseGet(() -> createFallbackCategory(userId, type));
+		}
 
-        return categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, defaultName, type)
-                .orElseGet(() -> categoryRepository.save(Category.builder()
-                        .userId(userId)
-                        .name(defaultName)
-                        .type(type)
-                        .systemDefault(Boolean.FALSE)
-                        .build()));
-    }
+		return createFallbackCategory(userId, type);
+	}
 
-    private LocalDate parseDate(String value) {
-        try {
-            if (value.contains("/")) {
-                return LocalDate.parse(value, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
-            }
-            return LocalDate.parse(value);
-        } catch (DateTimeParseException ex) {
-            throw new IllegalArgumentException("data invalida: " + value);
-        }
-    }
+	private Category createFallbackCategory(UUID userId, TransactionType type) {
+		String defaultName = switch (type) {
+			case EXPENSE -> "Outras despesas";
+			case INCOME -> "Outras receitas";
+			case TRANSFER -> "Transferência entre contas";
+		};
 
-    private LocalDate parseOfxDate(String dateTag) {
-        if (dateTag == null || dateTag.length() < 8) {
-            throw new IllegalArgumentException("DTPOSTED invalido");
-        }
-        String normalized = dateTag.substring(0, 8);
-        return LocalDate.parse(normalized, DateTimeFormatter.ofPattern("yyyyMMdd"));
-    }
+		return categoryRepository.findByUserIdAndNameIgnoreCaseAndType(userId, defaultName, type)
+				.orElseGet(() -> categoryRepository.save(Category.builder()
+						.userId(userId)
+						.name(defaultName)
+						.type(type)
+						.systemDefault(Boolean.FALSE)
+						.build()));
+	}
 
-    private BigDecimal parseAmount(String value) {
-        String normalized = value.replace(" ", "").replace("+", "").replace(",", ".");
-        return new BigDecimal(normalized);
-    }
+	private LocalDate parseDate(String value) {
+		try {
+			if (value.contains("/")) {
+				return LocalDate.parse(value, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+			}
+			return LocalDate.parse(value);
+		} catch (DateTimeParseException ex) {
+			throw new IllegalArgumentException("data invalida: " + value);
+		}
+	}
 
-    private TransactionType parseType(String value, BigDecimal amount) {
-        if (value == null || value.isBlank()) {
-            return amount.signum() < 0 ? TransactionType.EXPENSE : TransactionType.INCOME;
-        }
+	private LocalDate parseOfxDate(String dateTag) {
+		if (dateTag == null || dateTag.length() < 8) {
+			throw new IllegalArgumentException("DTPOSTED invalido");
+		}
+		String normalized = dateTag.substring(0, 8);
+		return LocalDate.parse(normalized, DateTimeFormatter.ofPattern("yyyyMMdd"));
+	}
 
-        String normalized = value.toLowerCase(Locale.ROOT);
-        if (normalized.contains("debit") || normalized.contains("payment") || normalized.contains("expense")
-                || normalized.contains("saque")) {
-            return TransactionType.EXPENSE;
-        }
+	private BigDecimal parseAmount(String value) {
+		String normalized = value.replace(" ", "").replace("+", "").replace(",", ".");
+		return new BigDecimal(normalized);
+	}
 
-        if (normalized.contains("credit") || normalized.contains("deposit") || normalized.contains("income")) {
-            return TransactionType.INCOME;
-        }
+	private TransactionType parseType(String value, BigDecimal amount) {
+		if (value == null || value.isBlank()) {
+			return amount.signum() < 0 ? TransactionType.EXPENSE : TransactionType.INCOME;
+		}
 
-        return amount.signum() < 0 ? TransactionType.EXPENSE : TransactionType.INCOME;
-    }
+		String normalized = value.toLowerCase(Locale.ROOT);
+		if (normalized.contains("debit") || normalized.contains("payment") || normalized.contains("expense")
+				|| normalized.contains("saque")) {
+			return TransactionType.EXPENSE;
+		}
 
-    private String extractTag(String block, String tag) {
-        Matcher matcher = OFX_TAG_PATTERN.matcher(block);
-        while (matcher.find()) {
-            if (tag.equalsIgnoreCase(matcher.group(1))) {
-                return matcher.group(2).trim();
-            }
-        }
-        return null;
-    }
+		if (normalized.contains("credit") || normalized.contains("deposit") || normalized.contains("income")) {
+			return TransactionType.INCOME;
+		}
 
-    private record ImportedRow(
-            LocalDate date,
-            String description,
-            BigDecimal amount,
-            TransactionType type,
-            String categoryName,
-            boolean recurring) {
-    }
+		return amount.signum() < 0 ? TransactionType.EXPENSE : TransactionType.INCOME;
+	}
+
+	private String extractTag(String block, String tag) {
+		Matcher matcher = OFX_TAG_PATTERN.matcher(block);
+		while (matcher.find()) {
+			if (tag.equalsIgnoreCase(matcher.group(1))) {
+				return matcher.group(2).trim();
+			}
+		}
+		return null;
+	}
+
+	private record ImportedRow(
+			LocalDate date,
+			String description,
+			BigDecimal amount,
+			TransactionType type,
+			String categoryName,
+			boolean recurring) {
+	}
 }

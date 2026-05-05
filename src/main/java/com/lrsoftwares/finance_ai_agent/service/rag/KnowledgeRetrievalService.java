@@ -23,7 +23,7 @@ public class KnowledgeRetrievalService {
 
 	public List<Document> retrieve(@NonNull String question) {
 		FilterExpressionBuilder filter = new FilterExpressionBuilder();
-		var expression = filter.and(filter.eq("language", "pt-BT"),
+		var expression = filter.and(filter.eq("language", "pt-BR"),
 				filter.or(filter.eq("theme", "educacao_financeira"),
 						filter.in("tags", "educacao_financeira")))
 				.build();

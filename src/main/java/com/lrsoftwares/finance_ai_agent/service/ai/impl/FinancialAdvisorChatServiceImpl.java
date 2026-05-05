@@ -46,8 +46,8 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 		List<Document> retrievedChunks = null;
 		try {
 			retrievedChunks = knowledgeRetrievalService.retrieve(Objects.requireNonNull(request.question()));
-		} catch (Exception e) {
-			log.error(e.getMessage());
+		} catch (Exception e) {			
+			log.error("Falha ao recuperar conhecimento RAG", e);
 		}
 		String context = buildFullContext(history, analysis, retrievedChunks);
 
@@ -154,6 +154,7 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 				- Não dê recomendações de investimento
 				- Foque em economia, controle e organização
 				- Responda em pt-BR.
+				- Formate sua resposta em Markdown (use títulos, listas, negrito e itálico quando apropriado).
 				- Priorize instruções práticas, ordem de decisão, riscos e trade-offs.
 				- Se houver conflito entre eficiência matemática e aderência comportamental, explicite o conflito.
 				- Quando o tema for dívida, sempre diferencie:
@@ -161,6 +162,7 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 				- reduzir parcela
 				- reduzir prazo
 				- reduzir risco jurídico
+				- Não considerar transferência entre contas de mesma titularidade como receita ou despesa deve ser tratado como transferência interna.
 				- Quando o tema for alavancagem, sempre inclua cenário de perda.
 
 				DADOS DO USUÁRIO:
