@@ -23,7 +23,7 @@ app:
   knowledge:
     docs-path: docs/rag
     seed:
-      enabled: false
+      enabled: true
       overwrite: false
       language: pt-BR
       audience: BEGINNER

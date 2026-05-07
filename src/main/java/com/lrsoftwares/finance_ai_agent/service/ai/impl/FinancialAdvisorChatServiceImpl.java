@@ -30,6 +30,10 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatService {
 
+	private static final int MAX_HISTORY_MESSAGES = 6;
+	private static final int MAX_KNOWLEDGE_CHUNKS = 3;
+	private static final String HISTORY_SUMMARY_MARKER = "[RESUMO_HISTORICO]";
+
 	private final FinancialAnalysisService analysisService;
 	private final LLMClient llmClient;
 	private final ChatService chatService;
@@ -46,7 +50,7 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 		List<Document> retrievedChunks = null;
 		try {
 			retrievedChunks = knowledgeRetrievalService.retrieve(Objects.requireNonNull(request.question()));
-		} catch (Exception e) {			
+		} catch (Exception e) {
 			log.error("Falha ao recuperar conhecimento RAG", e);
 		}
 		String context = buildFullContext(history, analysis, retrievedChunks);
@@ -57,10 +61,10 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 				"Não foi possível construir o prompt do sistema");
 		String response = llmClient.generate(systemPrompt, userPrompt);
 
-		chatService.saveMessage(sessionId, ChatRole.ASSISTANT, response);
 		if (response == null) {
 			response = "Desculpe, não consegui gerar uma resposta no momento.";
 		}
+		chatService.saveMessage(sessionId, ChatRole.ASSISTANT, response);
 		return new ChatAnswerResponse(
 				response,
 				currentMonth,
@@ -73,10 +77,10 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 		StringBuilder sb = new StringBuilder();
 		sb.append("Histórico da conversa:\n");
 		history.stream()
-				.limit(10) // não seja irresponsável
+				.limit(MAX_HISTORY_MESSAGES)
 				.forEach(msg -> sb.append(msg.getRole())
 						.append(": ")
-						.append(msg.getContent())
+						.append(toHistoryContent(msg))
 						.append("\n"));
 
 		sb.append("\n---\n");
@@ -95,17 +99,35 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 		StringBuilder sb = new StringBuilder();
 		sb.append("Conhecimento interno recuperado:\n");
 
-		chunks.forEach(doc -> {
+		chunks.stream().limit(MAX_KNOWLEDGE_CHUNKS).forEach(doc -> {
 			var metadata = doc.getMetadata();
 
 			sb.append("- Fonte: ").append(metadata.get("source")).append("\n");
 			sb.append("  Tema: ").append(metadata.get("theme")).append("\n");
 			sb.append("  Audiência: ").append(metadata.get("audience")).append("\n");
 			sb.append("  Idioma: ").append(metadata.get("language")).append("\n");
-			sb.append("  Conteúdo: ").append(doc.getText()).append("\n\n");
+			sb.append("  Conteúdo: ").append(Objects.toString(doc.getText(), "")).append("\n\n");
 		});
 
 		return sb.toString();
+	}
+
+	private String toHistoryContent(ChatMessage message) {
+		if (message.getRole() != ChatRole.ASSISTANT) {
+			return Objects.toString(message.getContent(), "");
+		}
+
+		return extractAssistantHistorySummary(Objects.toString(message.getContent(), ""));
+	}
+
+	private String extractAssistantHistorySummary(String content) {
+		int markerIndex = content.indexOf(HISTORY_SUMMARY_MARKER);
+		if (markerIndex < 0) {
+			return "Resumo não informado pelo assistente na mensagem anterior.";
+		}
+
+		String summary = content.substring(markerIndex + HISTORY_SUMMARY_MARKER.length()).trim();
+		return summary.isEmpty() ? "Resumo não informado pelo assistente na mensagem anterior." : summary;
 	}
 
 	private String buildContext(FinancialDiagnosisResponse analysis) {
@@ -164,11 +186,19 @@ public class FinancialAdvisorChatServiceImpl implements FinancialAdvisorChatServ
 				- reduzir risco jurídico
 				- Não considerar transferência entre contas de mesma titularidade como receita ou despesa deve ser tratado como transferência interna.
 				- Quando o tema for alavancagem, sempre inclua cenário de perda.
+				- Ao final de TODA resposta, adicione obrigatoriamente um bloco para histórico exatamente neste formato:
+				[RESUMO_HISTORICO]
+				- frase 1
+				- frase 2
+				- frase 3
+				- Esse bloco deve ter no máximo 3 bullets curtos e objetivos.
+				- Nunca omita o bloco [RESUMO_HISTORICO].
 
 				DADOS DO USUÁRIO:
 				%s
 				RESPONDA EM PORTUGUÊS BRASILEIRO.
-				""".formatted(context);
+				"""
+				.formatted(context);
 
 	}
 

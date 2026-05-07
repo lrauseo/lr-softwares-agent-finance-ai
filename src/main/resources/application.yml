@@ -18,7 +18,7 @@ spring:
         initialize-schema: true
         index-type: HNSW
         distance-type: COSINE_DISTANCE
-        dimensions: 1536
+        dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:1536}
         table-name: vector_store
     deepseek:
       api-key: ${DEEPSEEK_API_KEY}
@@ -46,13 +46,5 @@ management:
 server:
   port: 8080
 
-app:
-  knowledge:
-    docs-path: docs/rag
-    seed:
-      enabled: false
-      overwrite: false
-      language: pt-BR
-      audience: BEGINNER
 jwt:
   secret: ${JWT_SECRET:secret-key-super-segura}
